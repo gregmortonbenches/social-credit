@@ -167,14 +167,20 @@ Badges unlock for reaching milestones:
 | `profiles` | User identity and aggregated stats |
 | `collectives` | Household groups and settings |
 | `collective_members` | Membership with roles and status |
-| `tasks` | Task definitions per collective |
-| `weekly_assignments` | Task-to-member assignments |
-| `credit_ledger` | Immutable transaction log |
-| `credit_balances` | Cached `total_credits` per user |
+| `task_library` | Task definitions |
+| `task_preferences` | Per-user task ranking used by the draft |
+| `weekly_assignments` | Task-to-member assignments for a given week |
+| `draft_state` | In-progress weekly draft/assignment state |
+| `credit_ledger` | Immutable credit transaction log |
 | `denouncements` | Public accusations |
-| `denunciation_votes` | Voting on accusations |
-| `achievements` | Achievement definitions |
-| `achievement_unlocks` | Per-user unlock records |
+| `denouncement_votes` | Tribunal votes on accusations |
+| `achievements` | Per-user unlock records (`user_id` + `achievement_key`) |
+| `app_config` | Server-side configuration values |
+
+Achievement *definitions* are client-side in `constants/achievements.ts`; the
+`achievements` table stores only which user unlocked which key. A user's credit
+balance lives on `profiles.total_credits`, derived from `credit_ledger` — never
+written directly.
 
 ### Schemas
 
@@ -204,7 +210,7 @@ Only used for push delivery (no Firestore/Firebase Auth):
 1. **No hardcoded gameplay values** — import `CONFIG` from `constants/config.ts`
 2. **All credit changes go to `credit_ledger`** — never write directly to `total_credits`
 3. **Timezone is collective's IANA timezone** — not device timezone
-4. **Always escape HTML** — use `escapeHtml()` for user-supplied content
+4. **Always prefix usernames with "Comrade"** — never display a raw username
 5. **RLS always enforced** — never bypass row-level security
 6. **Age gate required** — sign-up must verify age 16+
 7. **Achievements hidden until unlock** — no peeking at locked achievements
@@ -214,9 +220,11 @@ Only used for push delivery (no Firestore/Firebase Auth):
 ### Pre-commit Checks
 
 ```bash
-npm run type-check      # TypeScript validation
-npm run lint            # ESLint
+npm run type-check      # TypeScript validation (strict mode)
 ```
+
+This is currently the only automated check — no linter or test runner is
+configured yet. Both would be welcome contributions.
 
 ### Database Migrations
 

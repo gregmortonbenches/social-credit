@@ -67,14 +67,13 @@ Read `CLAUDE.md` for the project's absolute rules. Key points when contributing:
    const now = zonedTimeToUtc(new Date(), tz);
    ```
 
-4. **User Input Escaping** — Always escape user-supplied content in UI
-   ```ts
+4. **Username Display** — Always prefix usernames with "Comrade", never show a raw one
+   ```tsx
    // ✗ Don't do this
-   <Text>{userInput}</Text>
-   
-   // ✓ Do this (if rendering as HTML)
-   import { escapeHtml } from '../lib/sanitize';
-   <Text>{escapeHtml(userInput)}</Text>
+   <Text>{profile.username}</Text>
+
+   // ✓ Do this
+   <Text>Comrade {profile.username}</Text>
    ```
 
 5. **Authentication & Security** — Never bypass Row Level Security (RLS)
@@ -164,10 +163,10 @@ export default async (req: Request) => {
 
 ## Testing
 
-Run unit tests (if added):
+There is no automated test suite yet. Before opening a PR, run the type checker:
 
 ```bash
-npm test
+npm run type-check
 ```
 
 Manual testing on devices:
