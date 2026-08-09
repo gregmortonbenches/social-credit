@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { fromZonedTime, toZonedTime } from 'https://esm.sh/date-fns-tz@3';
+import { rejectNonCronCaller } from '../_shared/cron-auth.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -12,6 +13,9 @@ const DEFAULT_TASK_DUE_HOUR = 23;
 const DEFAULT_TASK_DUE_MINUTE = 59;
 
 Deno.serve(async (req) => {
+  const denied = rejectNonCronCaller(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json().catch(() => ({}));
     const force = body?.force === true;

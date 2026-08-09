@@ -44,9 +44,16 @@ export default function SignUpScreen() {
     } else {
       const [dd, mm, yyyy] = dob.split('-').map(Number);
       const dobDate = new Date(yyyy, mm - 1, dd);
+      // new Date(2000, 1, 31) silently rolls over to 2 March rather than going
+      // NaN, so isNaN alone accepts impossible dates like 31-02-2000. Compare
+      // the parts back to confirm the date is the one that was actually typed.
+      const isRealDate =
+        dobDate.getFullYear() === yyyy &&
+        dobDate.getMonth() === mm - 1 &&
+        dobDate.getDate() === dd;
       const cutoff = new Date();
       cutoff.setFullYear(cutoff.getFullYear() - 16);
-      if (isNaN(dobDate.getTime()) || dobDate > cutoff)
+      if (!isRealDate || dobDate > cutoff)
         errs.dob = 'You must be 16 or older to join the Collective';
     }
     if (!agreed) errs.agreed = 'You must agree to the terms to proceed';

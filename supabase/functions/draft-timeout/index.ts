@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { rejectNonCronCaller } from '../_shared/cron-auth.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -8,7 +9,10 @@ const supabase = createClient(
 const DRAFT_TURN_TIMEOUT_MINUTES = 60;
 const WEEKLY_CREDIT_POOL = 1000;
 
-Deno.serve(async (_req) => {
+Deno.serve(async (req) => {
+  const denied = rejectNonCronCaller(req);
+  if (denied) return denied;
+
   try {
     const now = new Date().toISOString();
 
