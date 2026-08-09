@@ -49,7 +49,7 @@ export const useDenouncementStore = create<DenouncementState>((set, get) => ({
     buildDenounceMadePayload(accuserId, collectiveId, accusedId, null)
       .then((payload) => checkAchievements(accuserId, collectiveId, { type: 'denounce_made', payload }))
       .then((unlocked) => { if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked); })
-      .catch(() => {});
+      .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
   },
 
   submitExplanation: async (denouncementId, explanation) => {
@@ -77,7 +77,7 @@ export const useDenouncementStore = create<DenouncementState>((set, get) => ({
       buildVoteCastPayload(voterId, denouncement.collective_id, denouncementId)
         .then((payload) => checkAchievements(voterId, denouncement.collective_id, { type: 'vote_cast', payload }))
         .then((unlocked) => { if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked); })
-        .catch(() => {});
+        .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
     }
   },
 
@@ -112,13 +112,13 @@ export const useDenouncementStore = create<DenouncementState>((set, get) => ({
           buildDenounceResolvedPayload(userId, collectiveId, next.id, d)
             .then((payload) => checkAchievements(userId, collectiveId, { type: 'denounce_resolved', payload }))
             .then((unlocked) => { if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked); })
-            .catch(() => {});
+            .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
 
           if (next.accuser_id === userId) {
             buildDenounceMadePayload(userId, collectiveId, next.accused_id, next.outcome)
               .then((payload) => checkAchievements(userId, collectiveId, { type: 'denounce_made', payload }))
               .then((unlocked) => { if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked); })
-              .catch(() => {});
+              .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
           }
         }
       )

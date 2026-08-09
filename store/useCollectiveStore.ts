@@ -102,7 +102,7 @@ export const useCollectiveStore = create<CollectiveState>((set) => ({
     buildMemberJoinedPayload(userId, collectiveId)
       .then((payload) => checkAchievements(userId, collectiveId, { type: 'member_joined', payload }))
       .then((unlocked) => { if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked); })
-      .catch(() => {});
+      .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
   },
 
   leaveCollective: async (collectiveId, userId) => {
@@ -186,7 +186,7 @@ export const useCollectiveStore = create<CollectiveState>((set) => ({
               buildMemberJoinedPayload(userId, collectiveId)
                 .then((payload) => checkAchievements(userId, collectiveId, { type: 'member_joined', payload }))
                 .then((unlocked) => { if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked); })
-                .catch(() => {});
+                .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
             }
           }
         }

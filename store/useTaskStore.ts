@@ -100,7 +100,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         .then((unlocked) => {
           if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked);
         })
-        .catch(() => {});
+        .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
     }
   },
 

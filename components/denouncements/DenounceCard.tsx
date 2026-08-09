@@ -31,6 +31,7 @@ export function DenounceCard({
   const { submitExplanation, castVote } = useDenouncementStore();
   const [explanation, setExplanation] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [voting, setVoting] = useState(false);
 
   const isAccused = profile?.id === denouncement.accused_id;
   const isAccuser = profile?.id === denouncement.accuser_id;
@@ -61,7 +62,23 @@ export function DenounceCard({
         : `Confirm: dismiss the case against Comrade ${accusedName}?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Confirm', onPress: () => castVote(denouncement.id, profile.id, vote) },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            // castVote throws on failure. Previously the returned promise was
+            // dropped here, so a failed vote rejected unhandled and the voter
+            // was told nothing at all.
+            if (voting) return;
+            setVoting(true);
+            try {
+              await castVote(denouncement.id, profile.id, vote);
+            } catch {
+              Alert.alert('Error', 'Your vote could not be recorded. Please try again, Comrade.');
+            } finally {
+              setVoting(false);
+            }
+          },
+        },
       ]
     );
   }
@@ -126,10 +143,22 @@ export function DenounceCard({
 
       {canVote && (
         <View style={styles.voteRow}>
-          <TouchableOpacity style={styles.upholdBtn} onPress={() => handleVote('uphold')}>
+          <TouchableOpacity
+            style={[styles.upholdBtn, voting && styles.voteBtnBusy]}
+            onPress={() => handleVote('uphold')}
+            disabled={voting}
+            accessibilityRole="button"
+            accessibilityLabel={`Uphold the denouncement of Comrade ${accusedName}`}
+          >
             <Text style={styles.upholdText}>UPHOLD</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.dismissBtn} onPress={() => handleVote('dismiss')}>
+          <TouchableOpacity
+            style={[styles.dismissBtn, voting && styles.voteBtnBusy]}
+            onPress={() => handleVote('dismiss')}
+            disabled={voting}
+            accessibilityRole="button"
+            accessibilityLabel={`Dismiss the case against Comrade ${accusedName}`}
+          >
             <Text style={styles.dismissText}>DISMISS</Text>
           </TouchableOpacity>
         </View>
@@ -219,6 +248,7 @@ const styles = StyleSheet.create({
   upholdText: { color: '#FFFFFF', fontWeight: '700', letterSpacing: 1, fontSize: 12 },
   dismissBtn: { flex: 1, backgroundColor: '#F5F0E8', borderWidth: 2, borderColor: COLORS.muted, padding: 10, borderRadius: 0, alignItems: 'center' },
   dismissText: { color: COLORS.muted, fontWeight: '700', letterSpacing: 1, fontSize: 12 },
+  voteBtnBusy: { opacity: 0.5 },
   tallySection: { marginTop: 12, borderWidth: 1, borderColor: COLORS.muted },
   tallyLabel: { color: COLORS.muted, fontSize: 9, fontWeight: '700', letterSpacing: 2, textAlign: 'center', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: COLORS.muted },
   tallyRow: { flexDirection: 'row' },

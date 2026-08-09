@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { Alert, Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { avatarColor, COLORS } from '../../constants/theme';
 import type { WeeklyAssignment } from '../../lib/database.types';
@@ -27,7 +27,16 @@ export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
   const creditY = useRef(new Animated.Value(0)).current;
   const creditOpacity = useRef(new Animated.Value(0)).current;
 
+  // Guards against double-submit. The ref is the real lock — setState is async,
+  // so a fast second tap can land before a re-render disables the control. The
+  // state exists only to grey the control out.
+  const inFlight = useRef(false);
+  const [busy, setBusy] = useState(false);
+
   async function handleComplete() {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
     try {
       await completeTask(assignment.id);
 
@@ -60,6 +69,9 @@ export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
       ]).start();
     } catch {
       Alert.alert('Error', 'Could not complete task. Please try again, Comrade.');
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
     }
   }
 
@@ -73,11 +85,17 @@ export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
           text: 'Undo',
           style: 'destructive',
           onPress: async () => {
+            if (inFlight.current) return;
+            inFlight.current = true;
+            setBusy(true);
             try {
               await uncompleteTask(assignment.id);
               stampScale.setValue(0);
             } catch {
               Alert.alert('Error', 'Could not undo completion. Please try again, Comrade.');
+            } finally {
+              inFlight.current = false;
+              setBusy(false);
             }
           },
         },
@@ -108,13 +126,25 @@ export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
 
       <View style={styles.stampWrap}>
         {isDone ? (
-          <TouchableOpacity onPress={handleUndo} disabled={readOnly}>
+          <TouchableOpacity
+            onPress={handleUndo}
+            disabled={readOnly || busy}
+            accessibilityRole="button"
+            accessibilityLabel={`Undo completion of ${taskName}`}
+          >
             <Animated.View style={[styles.stamp, { transform: [{ scale: stampScale }] }]}>
               <Text style={styles.stampChar}>完</Text>
             </Animated.View>
           </TouchableOpacity>
         ) : !readOnly ? (
-          <TouchableOpacity style={styles.checkbox} onPress={handleComplete} />
+          <TouchableOpacity
+            style={[styles.checkbox, busy && styles.checkboxBusy]}
+            onPress={handleComplete}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel={`Mark ${taskName} complete`}
+            accessibilityState={{ disabled: busy }}
+          />
         ) : (
           <View style={styles.checkbox} />
         )}
@@ -174,6 +204,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: COLORS.muted,
   },
+  checkboxBusy: { opacity: 0.4 },
   creditFloat: {
     position: 'absolute',
     bottom: 40,
