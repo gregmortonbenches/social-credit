@@ -23,4 +23,10 @@ export const CONFIG = {
   // of dropping all of them on the backstop day. Members can then move any
   // individual task to another day of the same week (reschedule_assignment).
   STAGGER_TASK_DUE_DATES: true,
+
+  // Where the published Privacy Policy and Terms live. Drafts are in docs/.
+  // While these are empty the sign-up consent text renders as plain words rather
+  // than links, so it never appears to offer a document that does not exist.
+  PRIVACY_POLICY_URL: '',
+  TERMS_URL: '',
 } as const;

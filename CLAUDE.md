@@ -429,7 +429,7 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | 3 | Multi-collective | Future feature only — no core architecture impact |
 | 4 | Socialist Realism | Placeholder badge, no trigger yet |
 | 5 | Content moderation | Deferred — private personal project |
-| 6 | ICO / legal | Deferred — not commercial yet |
+| 6 | ICO / legal | Registration deferred until commercial. Privacy Policy and Terms are drafted in `docs/` from what the code actually collects, but are **unreviewed drafts with unfilled placeholders** — sign-up's consent checkbox links to `CONFIG.PRIVACY_POLICY_URL` / `CONFIG.TERMS_URL`, which are empty, so the text renders as plain words rather than pretending to link to documents that are not published. |
 | 7 | Sign-in | Email/password + Google + Apple (Apple required if Google offered) |
 | 8 | Backend | Supabase + FCM only. No Firebase backend. |
 | 9 | Account deletion | Handled by `delete-account` Edge Function (service role). Client calls `supabase.functions.invoke('delete-account')`. Weekly assignments and credit ledger user_id set to NULL (anonymised as "Former Comrade") — requires nullable FKs from migration 002. |

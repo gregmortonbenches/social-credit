@@ -1,7 +1,9 @@
 import { router } from 'expo-router';
+import { CONFIG } from '../../constants/config';
 import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -163,7 +165,28 @@ export default function SignUpScreen() {
             {agreed ? <Text style={styles.checkmark}>✓</Text> : null}
           </View>
           <Text style={styles.checkLabel}>
-            I agree to the Privacy Policy and Terms of Service
+            I agree to the{' '}
+            <Text
+              style={CONFIG.PRIVACY_POLICY_URL ? styles.checkLink : undefined}
+              onPress={
+                CONFIG.PRIVACY_POLICY_URL
+                  ? (e) => { e.stopPropagation(); Linking.openURL(CONFIG.PRIVACY_POLICY_URL); }
+                  : undefined
+              }
+            >
+              Privacy Policy
+            </Text>
+            {' '}and{' '}
+            <Text
+              style={CONFIG.TERMS_URL ? styles.checkLink : undefined}
+              onPress={
+                CONFIG.TERMS_URL
+                  ? (e) => { e.stopPropagation(); Linking.openURL(CONFIG.TERMS_URL); }
+                  : undefined
+              }
+            >
+              Terms of Service
+            </Text>
           </Text>
         </TouchableOpacity>
         {errors.agreed ? <Text style={styles.errorText}>{errors.agreed}</Text> : null}
@@ -235,6 +258,7 @@ const styles = StyleSheet.create({
   checkboxChecked: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   checkmark: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
   checkLabel: { flex: 1, color: COLORS.muted, fontSize: 13, lineHeight: 20 },
+  checkLink: { color: COLORS.primary, textDecorationLine: 'underline' },
   errorText: { color: COLORS.danger, fontSize: 12, marginBottom: 12 },
   confirmContainer: {
     flex: 1,
