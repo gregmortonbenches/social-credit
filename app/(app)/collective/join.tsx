@@ -20,11 +20,6 @@ export default function JoinCollectiveScreen() {
   const [loading, setLoading] = useState(false);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState('');
-  const [isMidWeek, setIsMidWeek] = useState(false);
-
-  useEffect(() => {
-    setIsMidWeek(new Date().getDay() !== 1);
-  }, []);
 
   useEffect(() => {
     const handleUrl = ({ url }: { url: string }) => {
@@ -91,14 +86,14 @@ export default function JoinCollectiveScreen() {
             <Text style={styles.foundLabel}>COLLECTIVE FOUND</Text>
             <Text style={styles.collectiveName}>{foundCollective.display_name}</Text>
 
-            {isMidWeek && (
-              <View style={styles.midWeekNotice}>
-                <Text style={styles.midWeekText}>
-                  You are joining mid-week, Comrade. You will enter the draft next Monday.{'\n'}
-                  Starting balance: <Text style={styles.credits}>{CONFIG.STARTING_CREDITS} credits</Text>
-                </Text>
-              </View>
-            )}
+            <View style={styles.midWeekNotice}>
+              <Text style={styles.midWeekText}>
+                Unless you join on a Monday, you become a full member at the next
+                Monday reset and receive duties from the assignment that follows.
+                The Collective&apos;s own timezone decides this, not your device.{'\n'}
+                Starting balance: <Text style={styles.credits}>{CONFIG.STARTING_CREDITS} credits</Text>
+              </Text>
+            </View>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -136,7 +131,6 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: COLORS.accent,
     padding: 16,
-    borderRadius: 4,
     width: '100%',
   },
   midWeekText: { color: COLORS.muted, fontSize: 13, lineHeight: 20 },

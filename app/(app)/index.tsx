@@ -1,12 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Modal, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { FlatList, Modal, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AchievementUnlockOverlay } from '../../components/achievements/AchievementUnlockOverlay';
 import { CollectivePanel } from '../../components/collective/CollectivePanel';
 import { ScoreboardPanel } from '../../components/collective/ScoreboardPanel';
 import { TasksPanel } from '../../components/tasks/TasksPanel';
+import { LoadingScreen } from '../../components/ui/LoadingScreen';
 import { COLORS } from '../../constants/theme';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCollectiveStore } from '../../store/useCollectiveStore';
@@ -85,12 +86,7 @@ export default function HomeScreen() {
   }, []);
 
   if (authLoading || !collectiveLoaded) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator color={COLORS.primary} size="large" />
-        <Text style={styles.loadingText}>LOADING...</Text>
-      </View>
-    );
+    return <LoadingScreen />;
   }
 
   if (!collective) {
@@ -191,8 +187,6 @@ function NoCollectiveLanding({ username }: { username: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  loading: { flex: 1, backgroundColor: COLORS.background, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { color: COLORS.muted, letterSpacing: 2, fontSize: 12 },
   landing: { flex: 1, backgroundColor: COLORS.background, padding: 32, alignItems: 'center', justifyContent: 'center' },
   landingGreeting: {
     color: COLORS.primary,

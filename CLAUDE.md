@@ -243,6 +243,10 @@ open → responded  (explanation submitted within 24h)
 ```
 2-person collective: auto-upheld, no vote. Abuse tracking applies.
 
+The "DENOUNCE A COMRADE!" button is disabled when there is nobody to denounce
+(no other active members) or nothing to denounce them for (no overdue tasks),
+with a line saying which — opening the modal in that state was a dead end.
+
 ### Holiday Pause
 - Freeze credits, redistribute tasks (lowest-task member first), re-enter draft next Sunday
 
@@ -429,6 +433,10 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | 30 | Room defaults | Create collective room stepper defaults all room types to 1 (not 0) — users are likely to have at least one of each. They can reduce to 0 or increase via the ±  stepper. |
 | 31 | Collective membership writes | `collective_members` has no client INSERT/UPDATE policy. `create_collective`, `join_collective_by_code`, `pause_membership`, `resume_membership` and `leave_collective` are SECURITY DEFINER RPCs (migration 013). Joining takes the **code**, not a collective id — possession of the code is the capability, checked in the DB. Active-vs-pending is decided from the collective's timezone, server-side. |
 | 32 | Immediate task credits | `credits_transaction` stays revoked from `authenticated`. `award-task-credits` Edge Function settles completion credits with a user JWT: verifies ownership, reads the amount from the row, idempotent against `credit_ledger`. `weekly-reset` remains the fallback. |
+| 33 | Sign-up email confirmation | `signUp()` returns whether a session was established. When Supabase requires email confirmation it returns none, so `sign-up.tsx` shows a "check your email" state instead of routing into onboarding — which previously ended with the root layout bouncing the user back to sign-in with no explanation. |
+| 34 | Join code visibility | The code is the only way into a Collective. `create.tsx` has a third step revealing it with copy/share before entering the app, and `CollectivePanel` has an "INVITE COMRADES" button. It remains in Collective Settings as well. |
+| 35 | Empty Tasks panel | When a user has no assignments, `TasksPanel` renders `NoAssignmentsNotice` rather than a bare "No tasks due today" line: it distinguishes a `pending` member (awaiting Monday induction) from an active one (next assignment countdown via `formatNextAssignment`), and links to preferences. Gated on `useTaskStore.isLoading` so it does not flash during the first fetch. |
+| 36 | Pull-to-refresh | `TasksPanel` has a `RefreshControl` that re-fetches assignments, collective/members and the task library. Realtime subscriptions can drop while backgrounded and there was previously no recovery short of restarting the app. |
 | 27 | Onboarding flow | `app/(onboarding)/slide-1.tsx` contains all 3 slides as a FlatList. Navigation to the app is triggered by swiping past the last slide — a 4th invisible "ghost" slide (`ghost: true`) is appended to `SLIDES`; `onViewableItemsChanged` calls `markOnboarded()` when the ghost slide becomes visible. Dots only show for non-ghost slides (`VISIBLE_SLIDES`). No auto-advance, no button. |
 
 ---
