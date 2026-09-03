@@ -280,6 +280,8 @@ with a line saying which — opening the modal in that state was a dead end.
 | `denounce-timeout` | Cron hourly | Deployed | Apply auto-guilt to unanswered denouncements |
 | `send-notification` | HTTP (called by other functions) | Deployed | Send FCM push via firebase-admin — requires `Authorization: Bearer <SERVICE_ROLE_KEY>` header |
 | `delete-account` | HTTP (called by client) | Deployed | Called by client with user JWT; uses service role internally |
+| `notify-collective` | HTTP (called by client) | Deployed | Sends pushes for client-caused events (denounced / resisted / joined). User JWT; derives recipient and message server-side from the row, so a caller cannot push arbitrary text at another member |
+| `overdue-reminder` | Cron hourly | Deployed | Pushes the overdue warning once per assignment, guarded by `notified_overdue_at` |
 | `award-task-credits` | HTTP (called by client) | Deployed | Settles completion credits immediately. User JWT; verifies caller owns the assignment, reads the amount from the row, idempotent against `credit_ledger` |
 
 Timezone note: crons run UTC. Each function computes the collective's local time using its IANA timezone string and `date-fns-tz`. Never hardcode UTC offsets.
@@ -288,15 +290,26 @@ Timezone note: crons run UTC. Each function computes the collective's local time
 
 ## Push Notification Copy (exact — do not change wording)
 
-- `"You have been Denounced!!"`
-- `"[Comrade Name] resists the denunciation!"`
-- `"It's your turn in the Weekly Draft, Comrade! You have 1 hour."`
-- `"The Weekly Draft is open! Gather your comrades."`
-- `"The Draft closes in 1 hour, Comrade!"`
-- `"A task is overdue, Comrade. Do not fail the Collective."`
-- `"Your draft turn passed — a task has been assigned for you."`
-- `"[Comrade Name] has joined the Collective!"`
-- `"Achievement unlocked: [Achievement Title]!"`
+| Copy | Sent by | Trigger |
+|---|---|---|
+| `"You have been Denounced!!"` | `notify-collective` | accuser raises a denouncement |
+| `"[Comrade Name] resists the denunciation!"` | `notify-collective` | accused submits an explanation |
+| `"[Comrade Name] has joined the Collective!"` | `notify-collective` | a member joins by code |
+| `"A task is overdue, Comrade. Do not fail the Collective."` | `overdue-reminder` | hourly sweep, once per assignment |
+| `"You did not respond to the denouncement in time. Verdict: AUTO-GUILTY."` | `denounce-timeout` | 24h response window expires |
+| `"The Collective's weekly tasks have been assigned, Comrade. Check your duties."` | `auto-assign` | Sunday assignment completes |
+
+**Four draft-era strings were removed**, not implemented: "It's your turn in the
+Weekly Draft", "The Weekly Draft is open", "The Draft closes in 1 hour" and
+"Your draft turn passed". They describe the interactive snake draft that
+decision 19 replaced with automatic assignment — there are no turns and no draft
+window to announce. `auto-assign`'s "tasks have been assigned" line replaces all
+four.
+
+**"Achievement unlocked" is not a push.** Achievements are evaluated on the
+device, immediately after the action that earned them, so the user is already
+looking at the app — `AchievementUnlockOverlay` shows it in place. A push would
+arrive while they were on the screen that triggered it.
 
 ---
 
@@ -479,6 +492,7 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | `014_assignment_write_hardening.sql` | Closes the `weekly_assignments` write hole (decision 38): revokes blanket UPDATE from `authenticated`, grants only `(status, completed_at)`, adds the missing `WITH CHECK`, and adds `reschedule_assignment` so members can move a task within its own week |
 | `015_age_verification.sql` | Adds `profiles.age_verified_at` and extends `handle_new_user()` to populate it from sign-up metadata (decision 39) |
 | `016_denouncement_hardening.sql` | Column-limits what the accused may write (they could previously set `outcome`/`status` and acquit themselves), adds the `withdrawn` status and `withdraw_denouncement` (decision 42) |
+| `017_overdue_reminder.sql` | Adds `weekly_assignments.notified_overdue_at` so the hourly overdue push fires once per assignment, and clears it on reschedule |
 
 **Two earlier migrations were repaired in place** (SECURITY-FINDINGS §4) because
 neither had ever been applicable: `001` created a `collectives` policy before the

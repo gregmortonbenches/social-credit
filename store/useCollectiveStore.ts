@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Collective, CollectiveMember, CollectiveSummary, TaskPreference } from '../lib/database.types';
 import { buildMemberJoinedPayload, checkAchievements } from '../lib/achievements';
+import { notifyCollective } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { useConnectionStore } from './useConnectionStore';
 import { useAchievementStore } from './useAchievementStore';
@@ -88,6 +89,8 @@ export const useCollectiveStore = create<CollectiveState>((set, get) => ({
     const collectiveId = collective.id;
     set({ collective });
     await get().fetchCollective(collectiveId);
+
+    notifyCollective({ event: 'joined', collectiveId });
 
     buildMemberJoinedPayload(userId, collectiveId)
       .then((payload) => checkAchievements(userId, collectiveId, { type: 'member_joined', payload }))

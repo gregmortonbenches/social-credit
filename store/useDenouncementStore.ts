@@ -6,6 +6,7 @@ import {
   buildVoteCastPayload,
   checkAchievements,
 } from '../lib/achievements';
+import { notifyCollective } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { useConnectionStore } from './useConnectionStore';
 import { useAchievementStore } from './useAchievementStore';
@@ -48,6 +49,10 @@ export const useDenouncementStore = create<DenouncementState>((set, get) => ({
     if (error) throw error;
     set((state) => ({ denouncements: [data, ...state.denouncements] }));
 
+    // "You have been Denounced!!" — the accused has 24 hours before guilt is
+    // automatic, and until now was never told the clock had started.
+    notifyCollective({ event: 'denounced', denouncementId: data.id });
+
     // Check double_agents at creation time (outcome not yet known, purge_the_bourgeoisie fires at resolution)
     buildDenounceMadePayload(accuserId, collectiveId, accusedId, null)
       .then((payload) => checkAchievements(accuserId, collectiveId, { type: 'denounce_made', payload }))
@@ -78,6 +83,8 @@ export const useDenouncementStore = create<DenouncementState>((set, get) => ({
     set((state) => ({
       denouncements: state.denouncements.map((d) => (d.id === denouncementId ? data : d)),
     }));
+
+    notifyCollective({ event: 'resisted', denouncementId });
   },
 
   castVote: async (denouncementId, voterId, vote) => {

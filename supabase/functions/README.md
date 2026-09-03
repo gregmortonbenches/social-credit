@@ -1,26 +1,28 @@
 # Edge Functions
 
-Six Deno functions. Three are scheduled (cron), three are request-driven.
+Eight Deno functions. Four are scheduled (cron), four are request-driven.
 
 | Function | Trigger | Caller auth |
 |---|---|---|
 | `auto-assign` | Cron — Sunday, `AUTO_ASSIGN_HOUR` in each collective's timezone | Service role |
 | `weekly-reset` | Cron — Monday 00:00 in each collective's timezone | Service role |
 | `denounce-timeout` | Cron — frequent | Service role |
+| `overdue-reminder` | Cron — hourly | Service role |
 | `send-notification` | Called by the other functions | Service role |
 | `delete-account` | Called by the app | User JWT |
 | `award-task-credits` | Called by the app on task completion | User JWT |
+| `notify-collective` | Called by the app for denounce / resist / join | User JWT |
 
 ## Caller authentication (required)
 
-The three cron functions run with the service role and act on **every collective
+The four cron functions run with the service role and act on **every collective
 in the database**, so they must never be reachable by app users.
 
 Supabase's default `verify_jwt` is not enough on its own: it proves the caller
 presented *a* valid key, and the anon key is embedded in the shipped mobile app.
 Any user could extract it and invoke these endpoints directly.
 
-All three therefore call `rejectNonCronCaller()` from `_shared/cron-auth.ts`,
+All four therefore call `rejectNonCronCaller()` from `_shared/cron-auth.ts`,
 which requires the service role key explicitly — the same guard
 `send-notification` already used.
 
@@ -44,9 +46,11 @@ Check there.
 supabase functions deploy auto-assign
 supabase functions deploy weekly-reset
 supabase functions deploy denounce-timeout
+supabase functions deploy overdue-reminder
 supabase functions deploy send-notification
 supabase functions deploy delete-account
 supabase functions deploy award-task-credits
+supabase functions deploy notify-collective
 ```
 
 ## Duplicated gameplay constants
