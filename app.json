@@ -15,7 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.socialcredit.app"
+      "bundleIdentifier": "com.socialcredit.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -33,10 +36,17 @@
     },
     "plugins": [
       "expo-router",
-      "expo-notifications"
+      [
+        "expo-notifications",
+        {
+          "color": "#CC0000"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "description": "A gamified household chore tracker for shared homes. Assign, complete and track domestic tasks with a playful credit system.",
+    "primaryColor": "#CC0000"
   }
 }
