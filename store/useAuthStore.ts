@@ -38,7 +38,9 @@ interface AuthState {
   profile: Profile | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, username: string) => Promise<void>;
+  /** Resolves true when Supabase established a session immediately, false when
+   *  the project requires email confirmation first and the user must verify. */
+  signUp: (email: string, password: string, username: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Pick<Profile, 'username' | 'device_push_token'>>) => Promise<void>;
   loadSession: () => Promise<void>;
@@ -85,12 +87,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signUp: async (email, password, username) => {
     // Pass username in metadata so the on_auth_user_created trigger picks it up.
     // The trigger creates the profile row server-side — no client insert needed.
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { username } },
     });
     if (error) throw error;
+
+    // With "Confirm email" enabled (the Supabase default) signUp succeeds but
+    // returns no session — the user is not signed in until they click the link.
+    // Report that back so the caller can say so, rather than routing into the
+    // app and being bounced straight back to sign-in by the root layout.
+    return data.session !== null;
   },
 
   signOut: async () => {

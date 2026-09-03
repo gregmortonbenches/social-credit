@@ -33,11 +33,13 @@ export default function SignUpScreen() {
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
     if (!username.trim()) errs.username = 'Username is required';
     if (!email.trim()) errs.email = 'Email is required';
+    else if (!/^\S+@\S+\.\S+$/.test(email.trim())) errs.email = 'That does not look like an email address';
     if (password.length < 8) errs.password = 'Password must be at least 8 characters';
     if (!dob || dob.length < 10) {
       errs.dob = 'Date of birth is required (DD-MM-YYYY)';
@@ -65,13 +67,45 @@ export default function SignUpScreen() {
     if (!validate()) return;
     setLoading(true);
     try {
-      await signUp(email.trim(), password, username.trim());
-      router.replace('/(onboarding)/slide-1');
+      const signedIn = await signUp(email.trim(), password, username.trim());
+      if (signedIn) {
+        router.replace('/(onboarding)/slide-1');
+      } else {
+        // Email confirmation is on: there is no session yet. Routing into the
+        // app here would send the user through onboarding only for the root
+        // layout to bounce them back to sign-in with no explanation.
+        setAwaitingConfirmation(true);
+      }
     } catch (err: any) {
       setErrors({ general: err.message ?? 'Sign up failed' });
     } finally {
       setLoading(false);
     }
+  }
+
+  if (awaitingConfirmation) {
+    return (
+      <View style={styles.confirmContainer}>
+        <Text style={styles.title}>SOCIAL CREDIT</Text>
+        <Text style={styles.confirmHeading}>CHECK YOUR EMAIL, COMRADE</Text>
+        <View style={styles.confirmRule} />
+        <Text style={styles.confirmBody}>
+          The Party has dispatched a confirmation link to{'\n'}
+          <Text style={styles.confirmEmail}>{email.trim()}</Text>
+        </Text>
+        <Text style={styles.confirmBody}>
+          Open it to verify your enlistment, then return here and sign in.
+        </Text>
+        <PropagandaButton
+          title="Go to Sign In"
+          onPress={() => router.replace('/(auth)/sign-in')}
+          style={styles.btn}
+        />
+        <TouchableOpacity onPress={() => setAwaitingConfirmation(false)}>
+          <Text style={styles.link}>Wrong address? Go back</Text>
+        </TouchableOpacity>
+      </View>
+    );
   }
 
   return (
@@ -183,6 +217,34 @@ const styles = StyleSheet.create({
   checkmark: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
   checkLabel: { flex: 1, color: COLORS.muted, fontSize: 13, lineHeight: 20 },
   errorText: { color: COLORS.danger, fontSize: 12, marginBottom: 12 },
+  confirmContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    padding: 24,
+    justifyContent: 'center',
+  },
+  confirmHeading: {
+    color: COLORS.accent,
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 3,
+    textAlign: 'center',
+    marginTop: 24,
+  },
+  confirmRule: {
+    height: 3,
+    backgroundColor: COLORS.primary,
+    marginTop: 12,
+    marginBottom: 24,
+  },
+  confirmBody: {
+    color: COLORS.text,
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  confirmEmail: { fontWeight: '700', color: COLORS.primary },
   btn: { marginTop: 24, marginBottom: 16 },
   link: { color: COLORS.accent, textAlign: 'center', fontSize: 14, letterSpacing: 1 },
 });
