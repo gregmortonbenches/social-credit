@@ -353,6 +353,12 @@ export interface Database {
         Args: { p_collective_id: string };
         Returns: undefined;
       };
+      /** Move one of your own outstanding tasks to another day of its week.
+       *  See 014_assignment_write_hardening.sql — due_date is not client-writable. */
+      reschedule_assignment: {
+        Args: { p_assignment_id: string; p_due_day: string };
+        Returns: string;
+      };
     };
     Enums: {
       [_ in never]: never;

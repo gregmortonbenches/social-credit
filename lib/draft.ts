@@ -52,6 +52,11 @@ export function collectiveDayKey(instant: Date, collectiveTimezone: string): str
   return formatInTimeZone(instant, collectiveTimezone, 'yyyy-MM-dd');
 }
 
+/** Short weekday name for an instant, in the collective's timezone: "Wed". */
+export function collectiveWeekdayShort(instant: Date, collectiveTimezone: string): string {
+  return formatInTimeZone(instant, collectiveTimezone, 'EEE');
+}
+
 /** True when two instants fall on the same calendar day in the collective's timezone. */
 export function isSameCollectiveDay(a: Date, b: Date, collectiveTimezone: string): boolean {
   return collectiveDayKey(a, collectiveTimezone) === collectiveDayKey(b, collectiveTimezone);

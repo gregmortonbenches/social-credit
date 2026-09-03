@@ -58,11 +58,14 @@ from the app's source tree, so several values are currently duplicated as local
 
 | Function | Duplicated |
 |---|---|
-| `auto-assign` | `AUTO_ASSIGN_HOUR`, `WEEKLY_CREDIT_POOL`, `DEFAULT_TASK_DUE_HOUR`, `DEFAULT_TASK_DUE_MINUTE` |
+| `auto-assign` | `AUTO_ASSIGN_HOUR`, `WEEKLY_CREDIT_POOL`, `DEFAULT_TASK_DUE_HOUR`, `DEFAULT_TASK_DUE_MINUTE`, `STAGGER_TASK_DUE_DATES` |
 | `denounce-timeout` | `RESPONSE_WINDOW_HOURS`, `DENOUNCE_ACCUSER_REWARD` |
 
 All of these currently match `constants/config.ts` — but nothing enforces that.
 If you change a value in `config.ts`, change it here too.
+
+`reschedule_assignment` in `014_assignment_write_hardening.sql` repeats the
+23:59 end-of-day for the same reason — SQL cannot import from the app either.
 
 ## Credits on task completion
 

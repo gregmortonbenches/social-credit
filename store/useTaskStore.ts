@@ -16,6 +16,8 @@ interface TaskState {
   fetchAssignments: (collectiveId: string, userId: string, timezone: string) => Promise<void>;
   completeTask: (assignmentId: string) => Promise<void>;
   uncompleteTask: (assignmentId: string) => Promise<void>;
+  /** Move an outstanding task to another day within its own week. `day` is yyyy-MM-dd. */
+  rescheduleAssignment: (assignmentId: string, day: string) => Promise<void>;
   subscribeToAssignments: (collectiveId: string) => () => void;
 }
 
@@ -120,6 +122,27 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           ? { ...a, status: 'pending' as const, completed_at: null }
           : a
       );
+    set((state) => ({
+      myAssignments: update(state.myAssignments),
+      allAssignments: update(state.allAssignments),
+    }));
+  },
+
+  // due_date is server-owned (migration 014): members may write only `status`
+  // and `completed_at`, because a client-writable due_date let a task be parked
+  // past the weekly reset and escape its failure penalty. The RPC checks
+  // ownership, that the task is still outstanding, and that the new day falls
+  // inside the assignment's own week.
+  rescheduleAssignment: async (assignmentId, day) => {
+    const { data, error } = await supabase.rpc('reschedule_assignment', {
+      p_assignment_id: assignmentId,
+      p_due_day: day,
+    });
+    if (error) throw error;
+
+    const dueDate = data as string;
+    const update = (assignments: WeeklyAssignment[]) =>
+      assignments.map((a) => (a.id === assignmentId ? { ...a, due_date: dueDate } : a));
     set((state) => ({
       myAssignments: update(state.myAssignments),
       allAssignments: update(state.allAssignments),

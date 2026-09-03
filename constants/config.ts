@@ -15,7 +15,12 @@ export const CONFIG = {
   COLLECTIVE_CODE_LENGTH: 5,
   COLLECTIVE_NAME_MAX_CHARS: 30,
 
-  DEFAULT_TASK_DUE_DAY: 0,
+  // Task due dates (collective timezone)
+  DEFAULT_TASK_DUE_DAY: 0,        // 0 = Sunday — the weekly backstop
   DEFAULT_TASK_DUE_HOUR: 23,
   DEFAULT_TASK_DUE_MINUTE: 59,
+  // When true, auto-assign spreads each member's tasks across the week instead
+  // of dropping all of them on the backstop day. Members can then move any
+  // individual task to another day of the same week (reschedule_assignment).
+  STAGGER_TASK_DUE_DATES: true,
 } as const;

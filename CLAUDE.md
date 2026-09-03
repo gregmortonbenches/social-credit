@@ -221,9 +221,16 @@ RLS: users read/write only rows belonging to their collective. `credit_ledger` i
 - Visualised as growing/declining wheat field on the Right Panel
 
 ### Task Due Dates
-- Default: Sunday 23:59 collective timezone (`CONFIG.DEFAULT_TASK_DUE_*`)
-- Override per assignment: update `weekly_assignments.due_date` directly in DB
-- No UI for per-task deadlines in v1 — change via Supabase dashboard or admin panel
+- `auto-assign` **staggers** each member's tasks across their week
+  (`CONFIG.STAGGER_TASK_DUE_DATES`), with the last always landing on the backstop
+  day — Sunday 23:59 collective timezone (`CONFIG.DEFAULT_TASK_DUE_*`). The
+  spread is even across Mon–Sun inclusive: one task means Sunday, two Mon/Sun,
+  three Mon/Thu/Sun, seven one per day. Tasks are handed out in preference order,
+  so a member's top pick is due first.
+- Members **reschedule** any outstanding task of their own to another day of the
+  same week via the `reschedule_assignment` RPC (day picker on the task card).
+  Several tasks on one day is allowed and expected.
+- `due_date` is **not client-writable** — see decision 38.
 
 ### Auto-Assignment (Sunday 14:00+, collective timezone)
 - Runs automatically — no interactive turns
@@ -402,7 +409,7 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 
 | # | Decision | Choice |
 |---|---|---|
-| 1 | Task due dates | Sunday 23:59 default; per-task override via `due_date` in DB |
+| 1 | Task due dates | Staggered across the week per member by `auto-assign`, backstop Sunday 23:59; members reschedule within their week via `reschedule_assignment`. Superseded the single shared Sunday deadline, which left "TODAY'S DUTIES" empty six days in seven and made a task `overdue` only in the sliver between Sunday 23:59 and the Monday reset — the window denouncing depends on. |
 | 2 | Credit maths | `WEEKLY_CREDIT_POOL / task_count`, symmetrical loss, all in config |
 | 3 | Multi-collective | Future feature only — no core architecture impact |
 | 4 | Socialist Realism | Placeholder badge, no trigger yet |
@@ -438,6 +445,7 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | 35 | Empty Tasks panel | When a user has no assignments, `TasksPanel` renders `NoAssignmentsNotice` rather than a bare "No tasks due today" line: it distinguishes a `pending` member (awaiting Monday induction) from an active one (next assignment countdown via `formatNextAssignment`), and links to preferences. Gated on `useTaskStore.isLoading` so it does not flash during the first fetch. |
 | 36 | Pull-to-refresh | `TasksPanel` has a `RefreshControl` that re-fetches assignments, collective/members and the task library. Realtime subscriptions can drop while backgrounded and there was previously no recovery short of restarting the app. |
 | 37 | Collective-timezone calendar helpers | `collectiveDayKey`, `isSameCollectiveDay`, `collectiveWeekStart` and `collectiveWeekStartInstant` in `lib/draft.ts` answer every "what day / what week is it" question in the collective's timezone — including the streak and top-scorer week bucketing in `lib/achievements.ts`, whose keys are compared against `weekly_assignments.week_start` and so must be built in the same timezone the Edge Functions wrote it in. Never use `toDateString()`, `getDay()` or `toISOString().split('T')[0]` on a device-local `Date` for this — the latter re-converts to UTC, so any device behind UTC produces tomorrow's date in the evening. `useTaskStore.fetchAssignments` takes the timezone as a required third argument rather than defaulting, so a missing one is a type error rather than a silent fallback to device time. |
+| 38 | Assignment writes | `weekly_assignments` is not wholly client-writable. Migration 014 revokes blanket UPDATE and grants only `(status, completed_at)` to `authenticated`, because the pre-existing UPDATE policy had a `USING` clause and no `WITH CHECK`: a member could rewrite `credits_value` on their own row and then have `award-task-credits` pay it out, or park `due_date` past the weekly reset to escape the failure penalty. Both verified against a local Postgres. Column privileges are checked before any policy, so this cannot be reasoned around. Rescheduling therefore goes through `reschedule_assignment`. |
 | 27 | Onboarding flow | `app/(onboarding)/slide-1.tsx` contains all 3 slides as a FlatList. Navigation to the app is triggered by swiping past the last slide — a 4th invisible "ghost" slide (`ghost: true`) is appended to `SLIDES`; `onViewableItemsChanged` calls `markOnboarded()` when the ghost slide becomes visible. Dots only show for non-ghost slides (`VISIBLE_SLIDES`). No auto-advance, no button. |
 
 ---
@@ -460,6 +468,7 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | `011_pending_member_visibility.sql` | Relaxes `collective_members` and `profiles` SELECT policies from `status = 'active'` to `status IN ('active', 'paused', 'pending')` — mid-week joiners have `pending` status until Monday and were invisible to the collective and to themselves. NOTE: introduced infinite recursion — fixed in 012 |
 | `012_fix_recursion_from_011.sql` | Fixes infinite recursion (code 42P17) introduced by 011. Updates `get_user_collective_ids()` SECURITY DEFINER function to include `pending`/`paused` statuses (the intent of 011), then restores both `collective_members` and `profiles` SELECT policies to use that function instead of direct self-referencing subqueries |
 | `013_collective_join_hardening.sql` | Closes the join-flow authorization hole (SECURITY-FINDINGS §1). `collectives` readable only by its own members; `collective_members` no longer client-writable. Adds `lookup_collective_by_code`, `join_collective_by_code`, `create_collective`, `pause_membership`, `resume_membership`, `leave_collective` as SECURITY DEFINER RPCs |
+| `014_assignment_write_hardening.sql` | Closes the `weekly_assignments` write hole (decision 38): revokes blanket UPDATE from `authenticated`, grants only `(status, completed_at)`, adds the missing `WITH CHECK`, and adds `reschedule_assignment` so members can move a task within its own week |
 
 **Two earlier migrations were repaired in place** (SECURITY-FINDINGS §4) because
 neither had ever been applicable: `001` created a `collectives` policy before the
