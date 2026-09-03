@@ -68,22 +68,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       allAssignments: update(state.allAssignments),
     }));
 
-    // NOTE: this immediate award currently always fails. credits_transaction is
-    // `revoke execute ... from anon, authenticated` (001_initial_schema.sql), so
-    // the RPC is callable only with the service role, never from the client.
-    // Credits are therefore settled solely by the weekly-reset job — a
-    // "fallback" that is in fact the only path, meaning a completed task shows
-    // no credit change until Monday. Fixing this properly needs an
-    // authenticated Edge Function that verifies the caller owns the assignment
-    // and then calls the RPC with the service role. Until then, surface the
-    // failure instead of swallowing it — the empty catch is what hid this.
+    // Settle the credits now, via the award-task-credits Edge Function. It is
+    // idempotent and weekly-reset runs the same dedup check, so weekly-reset
+    // remains a genuine fallback if this call fails (offline, say) rather than
+    // the only path it used to be.
     if (assignment?.credits_value) {
-      awardTaskCredits(
-        assignment.user_id,
-        assignment.collective_id,
-        assignmentId,
-        assignment.credits_value
-      ).catch((err) => {
+      awardTaskCredits(assignmentId).catch((err) => {
         if (__DEV__) console.warn('[tasks] immediate credit award failed:', err?.message ?? err);
       });
     }
