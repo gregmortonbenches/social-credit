@@ -12,5 +12,9 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: Platform.OS !== 'web',
     detectSessionInUrl: false,
+    // OAuth returns an authorisation code that lib/oauth.ts exchanges by hand
+    // after the auth browser closes. PKCE is what makes that exchange safe on a
+    // device that cannot keep a client secret.
+    flowType: 'pkce',
   },
 });

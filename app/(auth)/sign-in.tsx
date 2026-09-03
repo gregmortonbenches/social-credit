@@ -8,6 +8,7 @@ import {
   Text,
   TouchableOpacity,
 } from 'react-native';
+import { SocialSignIn } from '../../components/auth/SocialSignIn';
 import { PropagandaButton } from '../../components/ui/PropagandaButton';
 import { PropagandaInput } from '../../components/ui/PropagandaInput';
 import { getRandomProverb } from '../../constants/proverbs';
@@ -69,6 +70,8 @@ export default function SignInScreen() {
         />
 
         <PropagandaButton title="Report for Duty" onPress={handleSignIn} loading={loading} style={styles.btn} />
+
+        <SocialSignIn onError={setError} />
 
         <TouchableOpacity onPress={() => router.replace('/(auth)/sign-up')}>
           <Text style={styles.link}>New Comrade? Create an account</Text>

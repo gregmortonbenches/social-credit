@@ -3,6 +3,7 @@
 | File | Status |
 |---|---|
 | `PRIVACY.md` | **Draft — needs legal review and placeholder values.** Written from what the code actually collects |
+| `AUTH_SETUP.md` | What must be configured before Google and Apple sign-in work |
 | `TERMS.md` | **Draft — needs legal review and placeholder values.** Written to match how the app actually behaves |
 
 Both files contain `{{PLACEHOLDER}}` markers that must be filled before they are

@@ -430,7 +430,7 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | 4 | Socialist Realism | Placeholder badge, no trigger yet |
 | 5 | Content moderation | Deferred — private personal project |
 | 6 | ICO / legal | Registration deferred until commercial. Privacy Policy and Terms are drafted in `docs/` from what the code actually collects, but are **unreviewed drafts with unfilled placeholders** — sign-up's consent checkbox links to `CONFIG.PRIVACY_POLICY_URL` / `CONFIG.TERMS_URL`, which are empty, so the text renders as plain words rather than pretending to link to documents that are not published. |
-| 7 | Sign-in | Email/password + Google + Apple (Apple required if Google offered) |
+| 7 | Sign-in | Email/password + Google + Apple (Apple required if Google offered — App Store guideline 4.8). Implemented in `lib/oauth.ts`: Google through `expo-auth-session` and a PKCE code exchange, Apple through the native sheet with a hashed nonce. The Supabase client uses `flowType: 'pkce'`. **Neither works until configured** — see `docs/AUTH_SETUP.md`; the Apple config plugin is deliberately not in `app.json` yet because adding the entitlement before the Apple setup exists breaks iOS builds. |
 | 8 | Backend | Supabase + FCM only. No Firebase backend. |
 | 9 | Account deletion | Handled by `delete-account` Edge Function (service role). Client calls `supabase.functions.invoke('delete-account')`. Weekly assignments and credit ledger user_id set to NULL (anonymised as "Former Comrade") — requires nullable FKs from migration 002. |
 | 10 | Push tokens | Use `getDevicePushTokenAsync()` (native FCM/APNs token), NOT `getExpoPushTokenAsync()` — Firebase Admin requires native tokens |

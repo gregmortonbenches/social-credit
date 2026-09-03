@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SocialSignIn } from '../../components/auth/SocialSignIn';
 import { PropagandaButton } from '../../components/ui/PropagandaButton';
 import { PropagandaInput } from '../../components/ui/PropagandaInput';
 import { getRandomProverb } from '../../constants/proverbs';
@@ -192,6 +193,8 @@ export default function SignUpScreen() {
         {errors.agreed ? <Text style={styles.errorText}>{errors.agreed}</Text> : null}
 
         <PropagandaButton title="Enlist!" onPress={handleSignUp} loading={loading} style={styles.btn} />
+
+        <SocialSignIn onError={(m: string) => setErrors({ general: m })} />
 
         <TouchableOpacity
           onPress={() => router.replace('/(auth)/sign-in')}
