@@ -159,6 +159,57 @@ idempotent against the ledger. The grant on `credits_transaction` is unchanged.
 
 ---
 
+## 6. FIXED — `credits_transaction` was callable by any signed-in user
+
+**Severity: critical.** Found by the RLS test suite added in the same change, on
+its first run.
+
+`001` ends with what reads as a correct lockdown:
+
+```sql
+revoke execute on function credits_transaction from anon, authenticated;
+grant  execute on function credits_transaction to service_role;
+```
+
+It does nothing. Postgres grants `EXECUTE` on every new function to `PUBLIC` by
+default. `anon` and `authenticated` never held a grant of their own — they could
+already call the function *through* `PUBLIC*`, and revoking a privilege a role
+does not directly hold is a silent no-op. The ACL shows it, if you know that a
+leading `=X` means PUBLIC:
+
+```
+{=X/postgres, postgres=X/postgres, service_role=X/postgres}
+```
+
+So a `SECURITY DEFINER` function that writes `credit_ledger` and sets
+`profiles.total_credits` has been reachable by any signed-in user with the anon
+key — which ships in the app — for the life of the project. Reproduced against a
+local Postgres with the full chain applied: a member called it directly and went
+from 500 credits to 1,000,499.
+
+Three things believed true were not:
+
+- This document called the function "correctly locked down".
+- `award-task-credits` exists on the premise that the client cannot reach the
+  RPC. It could reach it all along.
+- §5 above and decision 38 closed a route where a member forged `credits_value`
+  so `award-task-credits` would overpay. That hole was real, but a shorter one
+  was open beside it.
+
+Fixed in `018_function_execute_hardening.sql` by revoking from `PUBLIC` — the
+grant that actually existed. `get_user_collective_ids` and `handle_new_user`
+were exposed the same way and are also restricted.
+
+The functions added in `013`, `014` and `016` were never affected: they use
+`REVOKE ALL ON FUNCTION ... FROM public, anon`, which names PUBLIC explicitly.
+
+**The lesson is the test, not the fix.** This was invisible to reading — the
+migration looks right, and two audits (one of them this document) read it as
+correct. It took executing the policy against a real database to see it, which
+is what `npm run test:db` now does on every push.
+
+---
+
 ## Related, not a vulnerability
 
 **The date of birth is discarded — now recorded.** `sign-up.tsx` validated the

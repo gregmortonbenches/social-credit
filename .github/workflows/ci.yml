@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  static:
+    name: Type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run type-check
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      # The timezone helpers exist because the app kept answering "what day is
+      # it" with the device clock. Running the suite under several device
+      # timezones is what actually proves the answer no longer depends on one.
+      fail-fast: false
+      matrix:
+        tz: [UTC, America/New_York, Pacific/Auckland, Asia/Kolkata]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+        env:
+          TZ: ${{ matrix.tz }}
+
+  database:
+    name: Migrations and RLS
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      # Applies every migration to an empty database and then asserts the
+      # policies behave. Two migrations in this repo's history could never have
+      # been applied at all, and several policies were wrong in ways only a real
+      # Postgres reveals, so this job is the one that matters most.
+      - name: Apply migrations and assert RLS
+        run: npm run test:db
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGPASSWORD: postgres
