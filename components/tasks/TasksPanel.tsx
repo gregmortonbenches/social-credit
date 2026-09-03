@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { getTaskIcon } from '../../constants/tasks';
 import { COLORS } from '../../constants/theme';
-import { formatNextAssignment } from '../../lib/draft';
+import { formatNextAssignment, isSameCollectiveDay } from '../../lib/draft';
 import type { TaskLibrary } from '../../lib/database.types';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -32,7 +32,7 @@ export function TasksPanel() {
     setRefreshing(true);
     try {
       await Promise.all([
-        fetchAssignments(collective.id, profile.id),
+        fetchAssignments(collective.id, profile.id, collective.timezone),
         fetchCollective(collective.id),
         loadTaskLibrary(),
       ]);
@@ -48,23 +48,25 @@ export function TasksPanel() {
     }
   }
 
+  // "Is this due today?" is a calendar question, and the calendar that counts is
+  // the collective's. toDateString() answers it in the device's timezone, so a
+  // comrade in another timezone saw a task due Sunday 23:59 collective time
+  // bucketed under a different day from everyone else in the household.
+  // (Overdue is a comparison of two instants, so it is timezone-independent.)
+  const tz = collective?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const now = new Date();
+
   const completed = myAssignments.filter((a) => a.status === 'complete');
   const overdue = myAssignments.filter(
-    (a) => a.status === 'pending' && new Date(a.due_date) < new Date()
+    (a) => a.status === 'pending' && new Date(a.due_date) < now
   );
   const today = myAssignments.filter((a) => {
     const due = new Date(a.due_date);
-    const now = new Date();
-    return (
-      a.status === 'pending' &&
-      due.toDateString() === now.toDateString() &&
-      due >= now
-    );
+    return a.status === 'pending' && due >= now && isSameCollectiveDay(due, now, tz);
   });
   const upcoming = myAssignments.filter((a) => {
     const due = new Date(a.due_date);
-    const now = new Date();
-    return a.status === 'pending' && due > now && due.toDateString() !== now.toDateString();
+    return a.status === 'pending' && due > now && !isSameCollectiveDay(due, now, tz);
   });
   const comradesAssignments = allAssignments.filter((a) => a.user_id !== profile?.id);
   const myStatus = members.find((m) => m.user_id === profile?.id)?.status;

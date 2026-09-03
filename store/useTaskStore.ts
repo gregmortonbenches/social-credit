@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { WeeklyAssignment } from '../lib/database.types';
 import { buildTaskCompletePayload, checkAchievements } from '../lib/achievements';
 import { awardTaskCredits } from '../lib/credits';
+import { collectiveWeekStart } from '../lib/draft';
 import { supabase } from '../lib/supabase';
 import { useAchievementStore } from './useAchievementStore';
 
@@ -10,18 +11,10 @@ interface TaskState {
   allAssignments: WeeklyAssignment[];
   weekStart: string | null;
   isLoading: boolean;
-  fetchAssignments: (collectiveId: string, userId: string) => Promise<void>;
+  fetchAssignments: (collectiveId: string, userId: string, timezone: string) => Promise<void>;
   completeTask: (assignmentId: string) => Promise<void>;
   uncompleteTask: (assignmentId: string) => Promise<void>;
   subscribeToAssignments: (collectiveId: string) => () => void;
-}
-
-function getWeekStart(date: Date): string {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setDate(diff);
-  return d.toISOString().split('T')[0];
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
@@ -30,9 +23,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   weekStart: null,
   isLoading: false,
 
-  fetchAssignments: async (collectiveId, userId) => {
+  // `week_start` is the Monday of the week in the COLLECTIVE's timezone, so the
+  // query has to be built in that timezone too. The old device-local helper also
+  // ran the result through toISOString(), which re-converts to UTC — so for any
+  // device behind UTC the evening hours produced tomorrow's date. Since the
+  // column only ever holds Mondays, that matched no rows at all and the user's
+  // whole task list silently emptied every evening.
+  fetchAssignments: async (collectiveId, userId, timezone) => {
     set({ isLoading: true });
-    const weekStart = getWeekStart(new Date());
+    const weekStart = collectiveWeekStart(timezone);
     const { data, error } = await supabase
       .from('weekly_assignments')
       .select('*')
@@ -128,8 +127,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           // Resolve userId from auth store rather than inferring from assignments,
           // which may be empty during load.
           const { useAuthStore } = require('./useAuthStore');
+          const { useCollectiveStore } = require('./useCollectiveStore');
           const userId = useAuthStore.getState().profile?.id;
-          if (userId) state.fetchAssignments(collectiveId, userId);
+          const timezone = useCollectiveStore.getState().collective?.timezone;
+          if (userId && timezone) state.fetchAssignments(collectiveId, userId, timezone);
         }
       )
       .subscribe();

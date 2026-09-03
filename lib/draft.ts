@@ -1,4 +1,5 @@
-import { fromZonedTime, toZonedTime } from 'date-fns-tz';
+import { format as formatDate } from 'date-fns';
+import { formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { CONFIG } from '../constants/config';
 
 export function isAssignmentTime(collectiveTimezone: string): boolean {
@@ -33,4 +34,52 @@ export function formatNextAssignment(collectiveTimezone: string): string {
   if (hours < 24) return `in ${hours} hour${hours === 1 ? '' : 's'}`;
   const days = Math.round(hours / 24);
   return `in ${days} day${days === 1 ? '' : 's'}`;
+}
+
+
+// ---------------------------------------------------------------------------
+// Collective-timezone calendar helpers
+//
+// The collective's timezone is the source of truth for all scheduling, so any
+// question of the form "what day is this?" must be answered in it. The device's
+// timezone is only ever correct by coincidence — a household in Europe/London
+// with a comrade travelling in Tokyo would otherwise disagree about which day a
+// task is due on, and about which week is the current one.
+// ---------------------------------------------------------------------------
+
+/** The calendar day an instant falls on, in the collective's timezone. */
+export function collectiveDayKey(instant: Date, collectiveTimezone: string): string {
+  return formatInTimeZone(instant, collectiveTimezone, 'yyyy-MM-dd');
+}
+
+/** True when two instants fall on the same calendar day in the collective's timezone. */
+export function isSameCollectiveDay(a: Date, b: Date, collectiveTimezone: string): boolean {
+  return collectiveDayKey(a, collectiveTimezone) === collectiveDayKey(b, collectiveTimezone);
+}
+
+/**
+ * The Monday that starts the current week, as a `yyyy-MM-dd` string in the
+ * collective's timezone. This is what `weekly_assignments.week_start` holds, so
+ * it is what the client must query on.
+ *
+ * Note this cannot be done with `toISOString()`: that re-converts to UTC, so for
+ * any device behind UTC the last hours of each day yield tomorrow's date.
+ */
+export function collectiveWeekStart(collectiveTimezone: string, instant: Date = new Date()): string {
+  const local = toZonedTime(instant, collectiveTimezone);
+  const day = local.getDay();
+  const diff = day === 0 ? -6 : 1 - day; // Sunday counts as the end of the week
+  local.setDate(local.getDate() + diff);
+  return formatDate(local, 'yyyy-MM-dd');
+}
+
+/** The exact instant the current week began — Monday 00:00 in the collective's timezone. */
+export function collectiveWeekStartInstant(
+  collectiveTimezone: string,
+  instant: Date = new Date()
+): Date {
+  return fromZonedTime(
+    `${collectiveWeekStart(collectiveTimezone, instant)}T00:00:00`,
+    collectiveTimezone
+  );
 }

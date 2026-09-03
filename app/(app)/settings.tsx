@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { PropagandaButton } from '../../components/ui/PropagandaButton';
 import { COLORS } from '../../constants/theme';
+import { collectiveWeekStart } from '../../lib/draft';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCollectiveStore } from '../../store/useCollectiveStore';
@@ -274,7 +275,11 @@ export default function SettingsScreen() {
       {profile?.is_admin && <AdminSection />}
 
       {__DEV__ && collective && profile && (
-        <DevSection collectiveId={collective.id} onAssigned={() => fetchAssignments(collective.id, profile.id)} />
+        <DevSection
+          collectiveId={collective.id}
+          timezone={collective.timezone}
+          onAssigned={() => fetchAssignments(collective.id, profile.id, collective.timezone)}
+        />
       )}
 
       <TouchableOpacity style={styles.signOutBtn} onPress={signOut}>
@@ -314,14 +319,15 @@ function AdminSection() {
   );
 }
 
-function getCurrentWeekStart(): string {
-  const d = new Date();
-  const day = d.getDay();
-  d.setDate(d.getDate() - day + (day === 0 ? -6 : 1));
-  return d.toISOString().split('T')[0];
-}
-
-function DevSection({ collectiveId, onAssigned }: { collectiveId: string; onAssigned: () => void }) {
+function DevSection({
+  collectiveId,
+  timezone,
+  onAssigned,
+}: {
+  collectiveId: string;
+  timezone: string;
+  onAssigned: () => void;
+}) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -329,7 +335,7 @@ function DevSection({ collectiveId, onAssigned }: { collectiveId: string; onAssi
     setLoading(true);
     setStatus('');
     try {
-      const weekStart = getCurrentWeekStart();
+      const weekStart = collectiveWeekStart(timezone);
 
       const { error: delErr } = await supabase
         .from('weekly_assignments')

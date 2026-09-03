@@ -37,7 +37,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!collective || !profile) return;
-    fetchAssignments(collective.id, profile.id);
+    fetchAssignments(collective.id, profile.id, collective.timezone);
     const unsubTasks = subscribeToAssignments(collective.id);
     const unsubMembers = subscribeToMembers(collective.id, profile.id);
     loadPreferences(collective.id, profile.id).then(() => {

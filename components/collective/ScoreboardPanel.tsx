@@ -5,6 +5,7 @@ import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Defs, Line as SvgLine, Pattern, Rect as SvgRect, Svg } from 'react-native-svg';
 import { CONFIG } from '../../constants/config';
 import { avatarColor, COLORS } from '../../constants/theme';
+import { collectiveWeekStartInstant } from '../../lib/draft';
 import type { Profile } from '../../lib/database.types';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -39,7 +40,7 @@ export function ScoreboardPanel() {
         .from('credit_ledger')
         .select('*')
         .eq('collective_id', collective.id)
-        .gte('created_at', getWeekStart()),
+        .gte('created_at', collectiveWeekStartInstant(collective.timezone).toISOString()),
     ]);
 
     setProfiles(profileData ?? []);
@@ -53,15 +54,6 @@ export function ScoreboardPanel() {
       deltaMap[entry.user_id].items.push({ reason: entry.reason, delta: entry.delta });
     }
     setWeeklyDeltas(Object.values(deltaMap));
-  }
-
-  function getWeekStart(): string {
-    const d = new Date();
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    d.setDate(diff);
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString();
   }
 
   const totalWeekly = weeklyDeltas.reduce((sum, d) => sum + d.delta, 0);
