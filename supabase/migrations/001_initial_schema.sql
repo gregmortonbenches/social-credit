@@ -47,24 +47,6 @@ create table collectives (
 
 alter table collectives enable row level security;
 
-create policy "Members can read their collective"
-  on collectives for select
-  using (
-    id in (
-      select collective_id from collective_members
-      where user_id = auth.uid() and status = 'active'
-    )
-  );
-
-create policy "Members can update their collective"
-  on collectives for update
-  using (
-    id in (
-      select collective_id from collective_members
-      where user_id = auth.uid() and status = 'active'
-    )
-  );
-
 create policy "Authenticated users can insert a collective"
   on collectives for insert
   with check (auth.role() = 'authenticated');
@@ -101,6 +83,28 @@ create policy "Users can insert themselves as member"
 create policy "Users can update own membership"
   on collective_members for update
   using (user_id = auth.uid());
+
+-- These two policies live here, after collective_members exists, rather than up
+-- with the rest of the `collectives` definition: a policy expression is parsed
+-- at CREATE POLICY time, so referencing collective_members before that table is
+-- created makes this script fail on a fresh database.
+create policy "Members can read their collective"
+  on collectives for select
+  using (
+    id in (
+      select collective_id from collective_members
+      where user_id = auth.uid() and status = 'active'
+    )
+  );
+
+create policy "Members can update their collective"
+  on collectives for update
+  using (
+    id in (
+      select collective_id from collective_members
+      where user_id = auth.uid() and status = 'active'
+    )
+  );
 
 -- ============================================================
 -- TASK LIBRARY
