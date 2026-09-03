@@ -1,5 +1,6 @@
 import { ACHIEVEMENTS, ACHIEVEMENTS_BY_KEY } from '../constants/achievements';
 import type { AchievementCategory } from '../constants/achievements';
+import { collectiveWeekStart } from './draft';
 import { supabase } from './supabase';
 import type { WeeklyAssignment } from './database.types';
 
@@ -219,13 +220,6 @@ export async function buildMemberJoinedPayload(
   };
 }
 
-function getWeekStartStr(dateStr: string): string {
-  const d = new Date(dateStr);
-  const day = d.getDay();
-  d.setDate(d.getDate() - day + (day === 0 ? -6 : 1));
-  return d.toISOString().split('T')[0];
-}
-
 export async function buildTaskCompletePayload(
   userId: string,
   collectiveId: string,
@@ -249,7 +243,7 @@ export async function buildTaskCompletePayload(
     supabase.from('weekly_assignments').select('week_start, status, task_id').eq('user_id', userId).eq('collective_id', collectiveId),
     supabase.from('weekly_assignments').select('user_id, status, credits_value').eq('collective_id', collectiveId).eq('week_start', assignment.week_start),
     supabase.from('weekly_assignments').select('id', { count: 'exact', head: true }).eq('collective_id', collectiveId).eq('status', 'complete'),
-    supabase.from('collectives').select('rooms').eq('id', collectiveId).single(),
+    supabase.from('collectives').select('rooms, timezone').eq('id', collectiveId).single(),
     supabase.from('collective_members').select('user_id').eq('collective_id', collectiveId).eq('status', 'active'),
     supabase.from('denouncements').select('created_at').eq('accused_id', userId).eq('collective_id', collectiveId),
     supabase.from('credit_ledger').select('user_id, delta, created_at').eq('collective_id', collectiveId).like('reason', 'task_complete%').gt('delta', 0).gte('created_at', fourWeeksAgo.toISOString()),
@@ -263,6 +257,14 @@ export async function buildTaskCompletePayload(
   const collectiveRooms = Array.isArray(collectiveResult.data?.rooms)
     ? (collectiveResult.data!.rooms as string[])
     : [];
+  // Week keys below are compared against `weekly_assignments.week_start`, which
+  // the Edge Functions write as a Monday in the COLLECTIVE's timezone. Deriving
+  // them from the device clock produced keys that simply never matched: the old
+  // helper ran a device-local date through toISOString(), so for any household
+  // behind UTC an evening timestamp yielded the *next* day — never a Monday.
+  // A key that matches nothing silently zeroes the streak and top-scorer maths.
+  const timezone =
+    collectiveResult.data?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const activeMembers = activeMembersResult.data ?? [];
   const denouncements = denouncementsResult.data ?? [];
   const recentCredits = recentCreditsResult.data ?? [];
@@ -323,7 +325,9 @@ export async function buildTaskCompletePayload(
     else break;
   }
 
-  const denouncedWeeks = new Set(denouncements.map((d) => getWeekStartStr(d.created_at)));
+  const denouncedWeeks = new Set(
+    denouncements.map((d) => collectiveWeekStart(timezone, new Date(d.created_at)))
+  );
   let noDenounceStreak = 0;
   for (const ws of weekStarts) {
     if (!denouncedWeeks.has(ws)) noDenounceStreak++;
@@ -334,7 +338,7 @@ export async function buildTaskCompletePayload(
   // credits may not be present yet if award and check race)
   const weeklyCredits: Record<string, Record<string, number>> = {};
   for (const row of recentCredits) {
-    const ws = getWeekStartStr(row.created_at);
+    const ws = collectiveWeekStart(timezone, new Date(row.created_at));
     if (!weeklyCredits[ws]) weeklyCredits[ws] = {};
     weeklyCredits[ws][row.user_id] = (weeklyCredits[ws][row.user_id] ?? 0) + row.delta;
   }
