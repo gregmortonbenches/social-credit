@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Modal, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { CONFIG } from '../../constants/config';
 import { COLORS } from '../../constants/theme';
-import type { Profile, WeeklyAssignment } from '../../lib/database.types';
+import type { MemberProfile, WeeklyAssignment } from '../../lib/database.types';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCollectiveStore } from '../../store/useCollectiveStore';
@@ -19,7 +19,7 @@ export function CollectivePanel() {
   const { denouncements, fetchDenouncements, createDenouncement, myVotes } = useDenouncementStore();
   const allAssignments = useTaskStore((s) => s.allAssignments);
 
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [profiles, setProfiles] = useState<MemberProfile[]>([]);
   const [taskNames, setTaskNames] = useState<Record<string, string>>({});
   const [quotaPercent, setQuotaPercent] = useState(0);
   const [voteCount, setVoteCount] = useState<Record<string, { uphold: number; dismiss: number }>>({});
@@ -58,22 +58,40 @@ export function CollectivePanel() {
   // Subscribe to vote count changes via realtime
   useEffect(() => {
     if (!collective || denouncements.length === 0) return;
+    // denouncement_votes has no collective_id column, so filter on the
+    // denouncements actually on screen. Without a filter this subscription woke
+    // on every vote cast anywhere in the database, by any household.
+    const ids = denouncements.map((d) => d.id);
     const channel = supabase
       .channel(`denouncement_votes:${collective.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'denouncement_votes' },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'denouncement_votes',
+          filter: `denouncement_id=in.(${ids.join(',')})`,
+        },
         loadVoteCounts
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [collective?.id, denouncements.length]);
+  }, [collective?.id, denouncements.map((d) => d.id).join(',')]);
 
   async function loadProfiles() {
     if (!collective) return;
     const ids = members.map((m) => m.user_id);
     if (ids.length === 0) return;
-    const { data } = await supabase.from('profiles').select('*').in('id', ids);
+    // Not select('*'): that ships every member's email, device_push_token and
+    // anonymous_token to every other member's device. Only these three are read.
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, total_credits')
+      .in('id', ids);
+    if (error) {
+      if (__DEV__) console.warn('[collective] profile load failed:', error.message);
+      return;
+    }
     setProfiles(data ?? []);
   }
 

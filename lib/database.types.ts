@@ -366,6 +366,10 @@ export interface Database {
 export type Tables<T extends keyof Database['public']['Tables']> =
   Database['public']['Tables'][T]['Row'];
 export type Profile = Tables<'profiles'>;
+/** The only profile fields other members are shown. Selecting the whole row
+ *  would ship every member's email, push token and anonymous_token to every
+ *  other member's device. */
+export type MemberProfile = Pick<Profile, 'id' | 'username' | 'total_credits'>;
 export type Collective = Tables<'collectives'>;
 /** What lookup_collective_by_code() returns to a prospective joiner — deliberately
  *  not the whole row, and never the join code. See migration 013. */

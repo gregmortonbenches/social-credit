@@ -6,7 +6,7 @@ import { Defs, Line as SvgLine, Pattern, Rect as SvgRect, Svg } from 'react-nati
 import { CONFIG } from '../../constants/config';
 import { avatarColor, COLORS } from '../../constants/theme';
 import { collectiveWeekStartInstant } from '../../lib/draft';
-import type { Profile } from '../../lib/database.types';
+import type { MemberProfile } from '../../lib/database.types';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCollectiveStore } from '../../store/useCollectiveStore';
@@ -21,7 +21,7 @@ export function ScoreboardPanel() {
   const collective = useCollectiveStore((s) => s.collective);
   const members = useCollectiveStore((s) => s.members);
   const currentUser = useAuthStore((s) => s.profile);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [profiles, setProfiles] = useState<MemberProfile[]>([]);
   const [weeklyDeltas, setWeeklyDeltas] = useState<WeeklyDelta[]>([]);
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export function ScoreboardPanel() {
     if (memberIds.length === 0) return;
 
     const [{ data: profileData }, { data: ledgerData }] = await Promise.all([
-      supabase.from('profiles').select('*').in('id', memberIds),
+      supabase.from('profiles').select('id, username, total_credits').in('id', memberIds),
       supabase
         .from('credit_ledger')
         .select('*')
