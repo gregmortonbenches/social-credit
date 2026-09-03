@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Collective, CollectiveMember, CollectiveSummary, TaskPreference } from '../lib/database.types';
 import { buildMemberJoinedPayload, checkAchievements } from '../lib/achievements';
 import { supabase } from '../lib/supabase';
+import { useConnectionStore } from './useConnectionStore';
 import { useAchievementStore } from './useAchievementStore';
 
 interface CollectiveState {
@@ -178,8 +179,15 @@ export const useCollectiveStore = create<CollectiveState>((set, get) => ({
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        // A dropped channel used to stay dropped in silence. Report it so the
+        // banner can say the view is no longer live.
+        useConnectionStore.getState().setChannelStatus(channelName, status === 'SUBSCRIBED');
+      });
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      useConnectionStore.getState().forgetChannel(channelName);
+      supabase.removeChannel(channel);
+    };
   },
 }));

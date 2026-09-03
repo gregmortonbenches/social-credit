@@ -7,10 +7,12 @@ import { AchievementUnlockOverlay } from '../../components/achievements/Achievem
 import { CollectivePanel } from '../../components/collective/CollectivePanel';
 import { ScoreboardPanel } from '../../components/collective/ScoreboardPanel';
 import { TasksPanel } from '../../components/tasks/TasksPanel';
+import { ConnectionBanner } from '../../components/ui/ConnectionBanner';
 import { LoadingScreen } from '../../components/ui/LoadingScreen';
 import { COLORS } from '../../constants/theme';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCollectiveStore } from '../../store/useCollectiveStore';
+import { useConnectionStore } from '../../store/useConnectionStore';
 import { useTaskStore } from '../../store/useTaskStore';
 
 const PANELS = ['COLLECTIVE', 'TASKS', 'SCOREBOARD'];
@@ -26,6 +28,22 @@ export default function HomeScreen() {
   const listRef = useRef<FlatList>(null);
   const [collectiveLoaded, setCollectiveLoaded] = useState(false);
   const [showPrefsModal, setShowPrefsModal] = useState(false);
+  const isOnline = useConnectionStore((s) => s.isOnline);
+  const startWatching = useConnectionStore((s) => s.startWatching);
+
+  useEffect(() => startWatching(), []);
+
+  // Coming back online does not replay whatever changed while we were away, and
+  // a realtime channel that dropped may have missed events even after it
+  // resubscribes. Re-fetch on the offline -> online transition.
+  const wasOnline = useRef(isOnline);
+  useEffect(() => {
+    const recovered = !wasOnline.current && isOnline;
+    wasOnline.current = isOnline;
+    if (!recovered || !collective || !profile) return;
+    fetchAssignments(collective.id, profile.id, collective.timezone);
+    fetchCollective(collective.id);
+  }, [isOnline, collective?.id, profile?.id]);
 
   useEffect(() => {
     if (!profile) {
@@ -95,6 +113,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <ConnectionBanner />
       <FlatList
         ref={listRef}
         data={PANELS}

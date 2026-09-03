@@ -7,6 +7,7 @@ import type { MemberProfile, WeeklyAssignment } from '../../lib/database.types';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCollectiveStore } from '../../store/useCollectiveStore';
+import { useConnectionStore } from '../../store/useConnectionStore';
 import { useDenouncementStore } from '../../store/useDenouncementStore';
 import { useTaskStore } from '../../store/useTaskStore';
 import { DenounceCard } from '../denouncements/DenounceCard';
@@ -69,8 +70,9 @@ export function CollectivePanel() {
     // denouncements actually on screen. Without a filter this subscription woke
     // on every vote cast anywhere in the database, by any household.
     const ids = denouncements.map((d) => d.id);
+    const channelName = `denouncement_votes:${collective.id}`;
     const channel = supabase
-      .channel(`denouncement_votes:${collective.id}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -81,8 +83,13 @@ export function CollectivePanel() {
         },
         loadVoteCounts
       )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+      .subscribe((status) => {
+        useConnectionStore.getState().setChannelStatus(channelName, status === 'SUBSCRIBED');
+      });
+    return () => {
+      useConnectionStore.getState().forgetChannel(channelName);
+      supabase.removeChannel(channel);
+    };
   }, [collective?.id, denouncements.map((d) => d.id).join(',')]);
 
   async function loadProfiles() {

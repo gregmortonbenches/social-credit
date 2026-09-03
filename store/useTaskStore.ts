@@ -4,6 +4,7 @@ import { buildTaskCompletePayload, checkAchievements } from '../lib/achievements
 import { awardTaskCredits } from '../lib/credits';
 import { collectiveWeekStart } from '../lib/draft';
 import { supabase } from '../lib/supabase';
+import { useConnectionStore } from './useConnectionStore';
 import { useAchievementStore } from './useAchievementStore';
 
 interface TaskState {
@@ -178,8 +179,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           if (userId && timezone) state.fetchAssignments(collectiveId, userId, timezone);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        // A dropped channel used to stay dropped in silence. Report it so the
+        // banner can say the view is no longer live.
+        useConnectionStore.getState().setChannelStatus(channelName, status === 'SUBSCRIBED');
+      });
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      useConnectionStore.getState().forgetChannel(channelName);
+      supabase.removeChannel(channel);
+    };
   },
 }));

@@ -25,6 +25,7 @@ This is currently a private project for personal use. It is not a commercial pro
 | Push Notifications | FCM (Firebase Cloud Messaging) | Free, unlimited — delivery only, NOT Firebase backend |
 | Push Token Mgmt | Expo Notifications | Device-side token handling |
 | State | Zustand + AsyncStorage | Persisted session |
+| Connectivity | `@react-native-community/netinfo` | Offline detection; pinned to 11.4.1 for Expo SDK 54 |
 | Styling | NativeWind (Tailwind for RN) | |
 | Deep Links | Expo Linking | Collective invite links |
 
@@ -452,6 +453,7 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | 41 | Auth wayfinding copy | Sign-in's heading and button both read "Report for Duty", and sign-up's both read "Enlist" — so neither screen contained the words a returning user scans for. The propaganda voice stays in the headings and buttons; a plain muted line underneath ("Sign in to your account" / "Create a new account") does the wayfinding, and the cross-links say plainly what they do. |
 | 42 | Denouncement writes and withdrawal | Migration 016. The accused's UPDATE policy was `USING (accused_id = auth.uid())` with no `WITH CHECK` over a table-wide grant, so the accused could set their own `outcome` and `status` — acquitting themselves before any vote. Now column-limited to `(explanation, status, responded_at)` with `WITH CHECK (status = 'responded')`. Adds a `withdrawn` status and `withdraw_denouncement`, usable by the accuser only while the case is still `open`; the row is kept rather than deleted so the two-person abuse counter still sees it, otherwise denounce-and-withdraw would be untracked harassment. The denounce modal now has a confirmation step naming the accused and the duty. |
 | 43 | Preference payoff | Own task cards show "YOUR 2ND CHOICE" or "NOT ONE OF YOUR PICKS" (the latter only once the member has ranked something, else it is noise), and the preferences screen explains that highest earners pick first. Ranking was the most effortful interaction in the app with no visible consequence. |
+| 44 | Connection state | `useConnectionStore` holds device connectivity (NetInfo) and the health of every realtime channel. All four `.subscribe()` calls now report their status — previously none did, so a dropped channel stayed dropped in silence and the screen quietly went stale. `ConnectionBanner` on the home screen distinguishes "offline" from "online but not live", because to a user both look identical: the data just stops changing. Coming back online re-fetches, since resubscribing does not replay what was missed. |
 | 27 | Onboarding flow | `app/(onboarding)/slide-1.tsx` contains all 3 slides as a FlatList. Navigation to the app is triggered by swiping past the last slide — a 4th invisible "ghost" slide (`ghost: true`) is appended to `SLIDES`; `onViewableItemsChanged` calls `markOnboarded()` when the ghost slide becomes visible. Dots only show for non-ghost slides (`VISIBLE_SLIDES`). No auto-advance, no button. |
 
 ---
