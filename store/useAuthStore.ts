@@ -24,7 +24,15 @@ async function fetchOrCreateProfile(session: Session): Promise<Profile | null> {
     'comrade';
   const { data: created, error: upsertError } = await supabase
     .from('profiles')
-    .upsert({ id: session.user.id, username, email: session.user.email ?? '', total_credits: CONFIG.STARTING_CREDITS })
+    .upsert({
+      id: session.user.id,
+      username,
+      email: session.user.email ?? '',
+      total_credits: CONFIG.STARTING_CREDITS,
+      // Carry the age-gate record through this fallback path too, so an account
+      // that lands here is not indistinguishable from an unverified one.
+      age_verified_at: (session.user.user_metadata?.age_verified_at as string | undefined) ?? null,
+    })
     .select()
     .single();
 
@@ -40,7 +48,7 @@ interface AuthState {
   signIn: (email: string, password: string) => Promise<void>;
   /** Resolves true when Supabase established a session immediately, false when
    *  the project requires email confirmation first and the user must verify. */
-  signUp: (email: string, password: string, username: string) => Promise<boolean>;
+  signUp: (email: string, password: string, username: string, ageVerified: boolean) => Promise<boolean>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Pick<Profile, 'username' | 'device_push_token'>>) => Promise<void>;
   loadSession: () => Promise<void>;
@@ -84,13 +92,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (error) throw error;
   },
 
-  signUp: async (email, password, username) => {
+  signUp: async (email, password, username, ageVerified) => {
     // Pass username in metadata so the on_auth_user_created trigger picks it up.
     // The trigger creates the profile row server-side — no client insert needed.
+    // age_verified_at rides along in metadata so the record survives the email
+    // confirmation round-trip, where there is no session to write with.
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { username } },
+      options: {
+        data: {
+          username,
+          age_verified_at: ageVerified ? new Date().toISOString() : null,
+        },
+      },
     });
     if (error) throw error;
 

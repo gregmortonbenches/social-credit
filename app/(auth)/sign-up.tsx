@@ -67,7 +67,8 @@ export default function SignUpScreen() {
     if (!validate()) return;
     setLoading(true);
     try {
-      const signedIn = await signUp(email.trim(), password, username.trim());
+      // validate() has already enforced the 16+ gate; record that it passed.
+      const signedIn = await signUp(email.trim(), password, username.trim(), true);
       if (signedIn) {
         router.replace('/(onboarding)/slide-1');
       } else {

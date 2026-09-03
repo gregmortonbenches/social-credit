@@ -52,7 +52,7 @@ This is currently a private project for personal use. It is not a commercial pro
 
 **Never write `collective_members` from the client.** The table has no INSERT or UPDATE policy for `authenticated` (migration 013). Joining, creating, pausing, resuming and leaving all go through the SECURITY DEFINER RPCs, which check the *current* status before writing — something a `WITH CHECK` clause cannot do. Do not add a policy to "fix" a permission error here; add or extend an RPC.
 
-**Age gate is mandatory.** Sign-up must block users under 16 via a date-of-birth field check.
+**Age gate is mandatory.** Sign-up must block users under 16 via a date-of-birth field check, and record that it passed in `profiles.age_verified_at`. The date of birth itself is deliberately not stored — the timestamp answers the compliance question without retaining the extra personal data.
 
 **FCM is for delivery only.** Never use Firestore, Firebase Auth, or Firebase Cloud Functions. Use only the `firebase-admin` SDK within Supabase Edge Functions to send FCM messages.
 
@@ -161,7 +161,7 @@ Admins can override any value at runtime via the `app_config` Supabase table wit
 ## Database Schema (Supabase Postgres)
 
 **`profiles`** — extends `auth.users`
-`id` · `username` · `email` · `total_credits` (int, default 500) · `device_push_token` · `anonymous_token` (set on deletion) · `deleted_at` (30-day grace period) · `created_at`
+`id` · `username` · `email` · `total_credits` (int, default 500) · `device_push_token` · `anonymous_token` (set on deletion) · `age_verified_at` (16+ check passed; the DOB itself is not stored) · `deleted_at` (30-day grace period) · `created_at`
 
 **`collectives`**
 `id` · `name` · `display_name` (name + " Collective") · `code` (char 5, unique) · `timezone` (IANA string) · `created_by` · `rooms` (jsonb) · `created_at`
@@ -302,7 +302,7 @@ Timezone note: crons run UTC. Each function computes the collective's local time
 
 **Palette**
 ```
-Primary:     #CC0000   revolutionary red
+Primary:     #C20000   revolutionary red
 Accent:      #000000   black
 Background:  #F0EAD6   cream
 Surface:     #E8DECA   slightly darker cream (cards, inputs, tabs)
@@ -336,7 +336,7 @@ The single source of truth is `constants/theme.ts` — update `COLORS` there fir
 | `app/(app)/_layout.tsx` | `contentStyle.backgroundColor` | Same |
 | `app/(onboarding)/_layout.tsx` | `contentStyle.backgroundColor` | Same |
 | `app/(auth)/_layout.tsx` | `contentStyle.backgroundColor` | Same |
-| `app.json` | `splash.backgroundColor`, `android.adaptiveIcon.backgroundColor` | Static config file |
+| `app.json` | `splash.backgroundColor`, `android.adaptiveIcon.backgroundColor`, `primaryColor`, the `expo-notifications` plugin `color` | Static config file |
 
 **Button text is always `'#FFFFFF'`, never `COLORS.text`** — `text` is body colour (dark on cream); buttons are red or black so need white text. These files hardcode white for button labels:
 - `components/ui/PropagandaButton.tsx` — central button component (`fg` variable)
@@ -423,7 +423,7 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | 12 | Auth listener | `onAuthStateChange` registered once via module-level `authListenerRegistered` flag. Do not call it inside `loadSession()` or any function called more than once. |
 | 13 | Collective join flow | `lookupCollective(code)` is read-only (no insert). `joinCollective(collectiveId, userId)` does the insert. Always call lookup first, join only on explicit user confirmation. |
 | 14 | Assignment time check | Always use `isAssignmentTime(collective.timezone)` from `lib/draft.ts`. Never re-implement using device local time. |
-| 15 | Colour theme | Light cream (#F0EAD6) background, red (#CC0000) primary, black (#000000) accent. Dark theme abandoned. See "Changing colours" guide in Design System section. |
+| 15 | Colour theme | Light cream (#F0EAD6) background, red (#C20000) primary, black (#000000) accent. Dark theme abandoned. The red was #CC0000 until the accessibility pass: it missed WCAG AA on `surface` (4.41), which affects red-on-surface headers. #C20000 is 5% darker, visually indistinguishable, and clears AA on both grounds — every palette pair now passes. See "Changing colours" guide in Design System section. |
 | 16 | Button style | `borderRadius: 0` on all buttons throughout the app — sharp corners only. |
 | 17 | Home navigation | Top tab bar removed. Dot indicators at bottom are the sole panel navigation. |
 | 18 | Prosperity visualiser | `WheatField.tsx` renders three tiled copies of a Noun Project crop SVG (noun-crops-7578613) side by side using `SvgXml` from `react-native-svg`. Opacity scales from 0.55 (0%) to 1.0 (100%) based on `quotaPercent`. Height 180px. Gold colour `#C89600`. Ground lines intentionally overlap between copies. Attribution text excluded from rendered XML. |
@@ -446,6 +446,7 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | 36 | Pull-to-refresh | `TasksPanel` has a `RefreshControl` that re-fetches assignments, collective/members and the task library. Realtime subscriptions can drop while backgrounded and there was previously no recovery short of restarting the app. |
 | 37 | Collective-timezone calendar helpers | `collectiveDayKey`, `isSameCollectiveDay`, `collectiveWeekStart` and `collectiveWeekStartInstant` in `lib/draft.ts` answer every "what day / what week is it" question in the collective's timezone — including the streak and top-scorer week bucketing in `lib/achievements.ts`, whose keys are compared against `weekly_assignments.week_start` and so must be built in the same timezone the Edge Functions wrote it in. Never use `toDateString()`, `getDay()` or `toISOString().split('T')[0]` on a device-local `Date` for this — the latter re-converts to UTC, so any device behind UTC produces tomorrow's date in the evening. `useTaskStore.fetchAssignments` takes the timezone as a required third argument rather than defaulting, so a missing one is a type error rather than a silent fallback to device time. |
 | 38 | Assignment writes | `weekly_assignments` is not wholly client-writable. Migration 014 revokes blanket UPDATE and grants only `(status, completed_at)` to `authenticated`, because the pre-existing UPDATE policy had a `USING` clause and no `WITH CHECK`: a member could rewrite `credits_value` on their own row and then have `award-task-credits` pay it out, or park `due_date` past the weekly reset to escape the failure penalty. Both verified against a local Postgres. Column privileges are checked before any policy, so this cannot be reasoned around. Rescheduling therefore goes through `reschedule_assignment`. |
+| 39 | Age gate record | The DOB was validated then discarded, so nothing showed the check had run. `profiles.age_verified_at` records when it passed; the date of birth is still not stored. The timestamp travels in sign-up metadata and `handle_new_user()` copies it into the profile, so it survives the email-confirmation round-trip where there is no client session to write with. Accounts predating this stay null. |
 | 27 | Onboarding flow | `app/(onboarding)/slide-1.tsx` contains all 3 slides as a FlatList. Navigation to the app is triggered by swiping past the last slide — a 4th invisible "ghost" slide (`ghost: true`) is appended to `SLIDES`; `onViewableItemsChanged` calls `markOnboarded()` when the ghost slide becomes visible. Dots only show for non-ghost slides (`VISIBLE_SLIDES`). No auto-advance, no button. |
 
 ---
@@ -469,6 +470,7 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | `012_fix_recursion_from_011.sql` | Fixes infinite recursion (code 42P17) introduced by 011. Updates `get_user_collective_ids()` SECURITY DEFINER function to include `pending`/`paused` statuses (the intent of 011), then restores both `collective_members` and `profiles` SELECT policies to use that function instead of direct self-referencing subqueries |
 | `013_collective_join_hardening.sql` | Closes the join-flow authorization hole (SECURITY-FINDINGS §1). `collectives` readable only by its own members; `collective_members` no longer client-writable. Adds `lookup_collective_by_code`, `join_collective_by_code`, `create_collective`, `pause_membership`, `resume_membership`, `leave_collective` as SECURITY DEFINER RPCs |
 | `014_assignment_write_hardening.sql` | Closes the `weekly_assignments` write hole (decision 38): revokes blanket UPDATE from `authenticated`, grants only `(status, completed_at)`, adds the missing `WITH CHECK`, and adds `reschedule_assignment` so members can move a task within its own week |
+| `015_age_verification.sql` | Adds `profiles.age_verified_at` and extends `handle_new_user()` to populate it from sign-up metadata (decision 39) |
 
 **Two earlier migrations were repaired in place** (SECURITY-FINDINGS §4) because
 neither had ever been applicable: `001` created a `collectives` policy before the

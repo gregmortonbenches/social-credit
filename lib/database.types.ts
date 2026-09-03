@@ -12,6 +12,7 @@ export interface Database {
           device_push_token: string | null;
           anonymous_token: string | null;
           is_admin: boolean;
+          age_verified_at: string | null;
           deleted_at: string | null;
           created_at: string;
         };
@@ -23,6 +24,7 @@ export interface Database {
           device_push_token?: string | null;
           anonymous_token?: string | null;
           is_admin?: boolean;
+          age_verified_at?: string | null;
           deleted_at?: string | null;
           created_at?: string;
         };
@@ -32,6 +34,7 @@ export interface Database {
           total_credits?: number;
           device_push_token?: string | null;
           is_admin?: boolean;
+          age_verified_at?: string | null;
           deleted_at?: string | null;
         };
         Relationships: [];

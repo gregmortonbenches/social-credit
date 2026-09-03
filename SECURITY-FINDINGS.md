@@ -161,13 +161,13 @@ idempotent against the ledger. The grant on `credits_transaction` is unchanged.
 
 ## Related, not a vulnerability
 
-**The date of birth is discarded.** `sign-up.tsx` validates it and then calls
-`signUp(email, password, username)` — the DOB is never passed on, and no
-`date_of_birth` column exists in any migration. So nothing records that the
-check happened. `CLAUDE.md` calls the age gate mandatory; if this ever goes
-commercial you would have no evidence of compliance. Storing a full DOB is
-extra PII, so an `age_verified_at timestamptz` on `profiles` may be the better
-trade — worth a deliberate decision either way.
+**The date of birth is discarded — now recorded.** `sign-up.tsx` validated the
+16+ gate and then threw the answer away: the DOB was never passed to `signUp`,
+and no column existed to hold it, so nothing showed the check had ever run.
+Resolved in `015_age_verification.sql` by the trade this note proposed —
+`profiles.age_verified_at` records *that* the check passed, and the date of
+birth itself is still not stored. Accounts created before this remain null and
+are therefore distinguishable from verified ones.
 
 **The other `lib/credits.ts` helpers cannot work from the client.**
 `deductTaskCredits`, `awardDenounceReward`, `deductDenounceAccuserPenalty`,
