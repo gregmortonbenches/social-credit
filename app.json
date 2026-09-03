@@ -39,7 +39,7 @@
       [
         "expo-notifications",
         {
-          "color": "#CC0000"
+          "color": "#C20000"
         }
       ]
     ],
@@ -47,6 +47,6 @@
       "typedRoutes": true
     },
     "description": "A gamified household chore tracker for shared homes. Assign, complete and track domestic tasks with a playful credit system.",
-    "primaryColor": "#CC0000"
+    "primaryColor": "#C20000"
   }
 }

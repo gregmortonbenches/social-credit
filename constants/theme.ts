@@ -26,14 +26,13 @@ export function avatarColor(userId: string): string {
 // Each is the smallest darkening of the original that clears the threshold, so
 // the hues are unchanged.
 //
-// `primary` is deliberately NOT adjusted: it is the brand red fixed by decision
-// 15. It passes on `background` (4.89) but sits just under on `surface` (4.41),
-// which affects red-on-surface section headers such as COMRADE STANDINGS. If you
-// want that to clear AA too, #C20000 does it (4.78 on surface, 5.30 on
-// background, 6.38 for white-on-red) and is visually indistinguishable — but it
-// is a brand decision, not an accessibility one, so it is left to you.
+//   primary #C20000  4.78 on surface, 5.30 on background, 6.38 white-on-red
+//                    (was #CC0000: 4.41 on surface — the one remaining AA miss,
+//                     affecting red-on-surface headers like COMRADE STANDINGS)
+// The red is 5% darker than the original and visually indistinguishable at any
+// size; it is the smallest change that clears AA on both grounds.
 export const COLORS = {
-  primary: '#CC0000',
+  primary: '#C20000',
   accent: '#000000',
   background: '#F0EAD6',
   surface: '#E8DECA',
