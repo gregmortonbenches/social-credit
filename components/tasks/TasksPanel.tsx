@@ -99,6 +99,13 @@ export function TasksPanel() {
       <Text style={styles.bannerText} accessibilityRole="header">TASKS</Text>
       <View style={styles.titleRule} />
 
+      {/* The running total. Completion floats a "+83" off the card; without
+          somewhere for it to land, nothing in the app visibly accumulated. */}
+      <View style={styles.creditBar}>
+        <Text style={styles.creditLabel}>YOUR CREDITS</Text>
+        <Text style={styles.creditValue}>{(profile?.total_credits ?? 0).toLocaleString()}</Text>
+      </View>
+
       {error ? (
         <View style={styles.errorCard}>
           <Text style={styles.errorHeading}>CANNOT REACH THE COLLECTIVE</Text>
@@ -312,7 +319,28 @@ const styles = StyleSheet.create({
   posterFade: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 },
   content: { padding: 16 },
   bannerText: { color: COLORS.primary, fontWeight: '900', letterSpacing: 3, fontSize: 26, marginBottom: 10, textAlign: 'center' },
-  titleRule: { height: 3, backgroundColor: COLORS.primary, marginBottom: 20 },
+  titleRule: { height: 3, backgroundColor: COLORS.primary, marginBottom: 14 },
+  creditBar: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.surface,
+    paddingBottom: 10,
+    marginBottom: 20,
+  },
+  creditLabel: {
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
+  creditValue: {
+    color: COLORS.primary,
+    fontFamily: 'SpaceMono',
+    fontSize: 24,
+    fontWeight: '700',
+  },
   empty: { color: COLORS.muted, fontSize: 13, fontStyle: 'italic', textAlign: 'center', paddingVertical: 8 },
   errorCard: {
     borderTopWidth: 4,

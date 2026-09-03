@@ -52,6 +52,10 @@ interface AuthState {
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Pick<Profile, 'username' | 'device_push_token'>>) => Promise<void>;
   loadSession: () => Promise<void>;
+  /** Re-read the profile row. Credits are settled server-side by
+   *  award-task-credits, so the cached copy goes stale the moment a task is
+   *  ticked off. */
+  refreshProfile: () => Promise<void>;
 }
 
 // Register the auth state listener once at module level so it is never duplicated
@@ -120,6 +124,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     set({ session: null, profile: null });
+  },
+
+  refreshProfile: async () => {
+    const { profile } = get();
+    if (!profile) return;
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', profile.id)
+      .maybeSingle();
+    if (error || !data) return;
+    set({ profile: data });
   },
 
   updateProfile: async (updates) => {

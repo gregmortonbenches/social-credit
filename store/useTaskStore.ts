@@ -88,9 +88,17 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     // remains a genuine fallback if this call fails (offline, say) rather than
     // the only path it used to be.
     if (assignment?.credits_value) {
-      awardTaskCredits(assignmentId).catch((err) => {
-        if (__DEV__) console.warn('[tasks] immediate credit award failed:', err?.message ?? err);
-      });
+      awardTaskCredits(assignmentId)
+        // The award is applied to profiles.total_credits server-side, so the
+        // cached profile is stale until re-read. Without this the "+83" floats
+        // up from the card and lands nowhere.
+        .then(() => {
+          const { useAuthStore } = require('./useAuthStore');
+          return useAuthStore.getState().refreshProfile();
+        })
+        .catch((err: any) => {
+          if (__DEV__) console.warn('[tasks] immediate credit award failed:', err?.message ?? err);
+        });
     }
 
     // Achievement check (fire-and-forget)

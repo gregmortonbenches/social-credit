@@ -115,6 +115,7 @@ export default function SignUpScreen() {
         <Text style={styles.title}>SOCIAL CREDIT</Text>
         <Text style={styles.subtitle}>{PROVERB}</Text>
         <Text style={styles.heading}>ENLIST, COMRADE</Text>
+        <Text style={styles.headingSub}>Create a new account</Text>
 
         {errors.general ? <Text style={styles.generalError}>{errors.general}</Text> : null}
 
@@ -174,7 +175,7 @@ export default function SignUpScreen() {
           accessibilityRole="link"
           accessibilityLabel="Already a Comrade? Sign in"
         >
-          <Text style={styles.link}>Already a Comrade? Sign In</Text>
+          <Text style={styles.link}>Already a Comrade? Sign in</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -204,6 +205,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     letterSpacing: 3,
+    marginBottom: 24,
+  },
+  headingSub: {
+    color: COLORS.muted,
+    fontSize: 13,
+    marginTop: -16,
     marginBottom: 24,
   },
   generalError: {

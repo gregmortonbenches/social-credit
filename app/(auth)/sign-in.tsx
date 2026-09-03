@@ -46,6 +46,10 @@ export default function SignInScreen() {
         <Text style={styles.title}>SOCIAL CREDIT</Text>
         <Text style={styles.subtitle}>{PROVERB}</Text>
         <Text style={styles.heading}>REPORT FOR DUTY</Text>
+        {/* The heading and the button both said "Report for Duty", so neither
+            told a returning user which of the two screens they were on. The
+            voice stays; this line does the wayfinding. */}
+        <Text style={styles.headingSub}>Sign in to your account</Text>
 
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
 
@@ -67,7 +71,7 @@ export default function SignInScreen() {
         <PropagandaButton title="Report for Duty" onPress={handleSignIn} loading={loading} style={styles.btn} />
 
         <TouchableOpacity onPress={() => router.replace('/(auth)/sign-up')}>
-          <Text style={styles.link}>New Comrade? Enlist Here</Text>
+          <Text style={styles.link}>New Comrade? Create an account</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -97,6 +101,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     letterSpacing: 3,
+    marginBottom: 24,
+  },
+  headingSub: {
+    color: COLORS.muted,
+    fontSize: 13,
+    marginTop: -16,
     marginBottom: 24,
   },
   errorBox: {
