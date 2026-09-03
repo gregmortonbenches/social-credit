@@ -1,9 +1,11 @@
+import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -29,7 +31,9 @@ export default function CreateCollectiveScreen() {
   const profile = useAuthStore((s) => s.profile);
   const createCollective = useCollectiveStore((s) => s.createCollective);
 
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [createdCode, setCreatedCode] = useState('');
+  const [copied, setCopied] = useState(false);
   const [name, setName] = useState('');
   const [rooms, setRooms] = useState<Record<string, number>>(
     Object.fromEntries(ROOM_TYPES.map((r) => [r.key, 1]))
@@ -52,7 +56,12 @@ export default function CreateCollectiveScreen() {
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       await createCollective(name.trim(), timezone, rooms, profile.id);
-      router.replace('/(app)');
+      // Reveal the join code before entering the app. It is the only way to get
+      // housemates in, and it was previously never shown at the moment it is
+      // needed — the founder had to go digging in Settings to find it.
+      const code = useCollectiveStore.getState().collective?.code ?? '';
+      setCreatedCode(code);
+      setStep(3);
     } catch (err: any) {
       setError(err.message ?? 'Failed to establish Collective');
     } finally {
@@ -123,6 +132,51 @@ export default function CreateCollectiveScreen() {
             </TouchableOpacity>
           </>
         )}
+
+        {step === 3 && (
+          <>
+            <Text style={styles.successHeader}>COLLECTIVE ESTABLISHED</Text>
+            <Text style={styles.hint}>
+              Share this code with your household, Comrade. It is the only way in.
+            </Text>
+
+            <View style={styles.codeBox}>
+              <Text style={styles.codeLabel}>JOIN CODE</Text>
+              <Text style={styles.codeValue}>{createdCode}</Text>
+            </View>
+
+            <PropagandaButton
+              title={copied ? 'Copied!' : 'Copy Code'}
+              variant="ghost"
+              onPress={async () => {
+                await Clipboard.setStringAsync(createdCode);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              style={styles.codeBtn}
+            />
+            <PropagandaButton
+              title="Share Invite"
+              onPress={() =>
+                Share.share({
+                  message: `Join my Collective on Social Credit! Code: ${createdCode}`,
+                })
+              }
+              style={styles.codeBtn}
+            />
+
+            <Text style={styles.codeFootnote}>
+              You can find this again under Collective Settings.
+            </Text>
+
+            <PropagandaButton
+              title="Enter the Collective"
+              variant="secondary"
+              onPress={() => router.replace('/(app)')}
+              style={styles.btn}
+            />
+          </>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -161,6 +215,38 @@ const styles = StyleSheet.create({
   stepBtnText: { color: COLORS.primary, fontSize: 20, fontWeight: '700', lineHeight: 24 },
   stepValue: { color: COLORS.text, fontSize: 18, fontFamily: 'SpaceMono', minWidth: 24, textAlign: 'center' },
   errorText: { color: COLORS.danger, fontSize: 13, marginBottom: 12 },
+  successHeader: {
+    color: COLORS.accent,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 2,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  codeBox: {
+    borderWidth: 3,
+    borderColor: COLORS.primary,
+    paddingVertical: 24,
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 20,
+  },
+  codeLabel: { color: COLORS.muted, fontSize: 11, letterSpacing: 3, fontWeight: '700', marginBottom: 8 },
+  codeValue: {
+    color: COLORS.primary,
+    fontFamily: 'SpaceMono',
+    fontSize: 44,
+    letterSpacing: 10,
+    fontWeight: '700',
+  },
+  codeBtn: { marginBottom: 10 },
+  codeFootnote: {
+    color: COLORS.muted,
+    fontSize: 12,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
   btn: { marginTop: 24, marginBottom: 12 },
   back: { color: COLORS.accent, textAlign: 'center', fontSize: 14 },
 });

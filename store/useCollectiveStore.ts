@@ -20,7 +20,7 @@ interface CollectiveState {
   savePreferences: (collectiveId: string, userId: string, rankedTaskIds: string[]) => Promise<void>;
 }
 
-export const useCollectiveStore = create<CollectiveState>((set) => ({
+export const useCollectiveStore = create<CollectiveState>((set, get) => ({
   collective: null,
   members: [],
   taskPreferences: [],
@@ -48,7 +48,11 @@ export const useCollectiveStore = create<CollectiveState>((set) => ({
     if (error) throw error;
     if (!collective) throw new Error('Could not create Collective');
 
+    // Load members too. Setting only `collective` left `members` empty, and the
+    // home screen does not re-run its lookup for an already-mounted session — so
+    // the founder saw an empty COMRADE STATUS list without even themselves in it.
     set({ collective });
+    await get().fetchCollective(collective.id);
     return collective.id;
   },
 
@@ -82,6 +86,7 @@ export const useCollectiveStore = create<CollectiveState>((set) => ({
 
     const collectiveId = collective.id;
     set({ collective });
+    await get().fetchCollective(collectiveId);
 
     buildMemberJoinedPayload(userId, collectiveId)
       .then((payload) => checkAchievements(userId, collectiveId, { type: 'member_joined', payload }))

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { CONFIG } from '../../constants/config';
 import { COLORS } from '../../constants/theme';
 import type { Profile, WeeklyAssignment } from '../../lib/database.types';
@@ -30,9 +30,18 @@ export function CollectivePanel() {
   useEffect(() => {
     if (!collective) return;
     fetchDenouncements(collective.id);
-    loadProfiles();
     loadTaskNames();
   }, [collective]);
+
+  // Keyed on the member set, not just the collective: `members` arrives from a
+  // separate fetch and is updated live by the realtime subscription, so keying
+  // this on `collective` alone meant a comrade who joined after you opened the
+  // app never appeared in COMRADE STATUS. Keyed on the ids rather than the array
+  // itself because the subscription hands back a new array on every event.
+  const memberIdsKey = members.map((m) => m.user_id).sort().join(',');
+  useEffect(() => {
+    loadProfiles();
+  }, [collective?.id, memberIdsKey]);
 
   useEffect(() => {
     const credits = allAssignments
@@ -105,6 +114,17 @@ export function CollectivePanel() {
     (m) => m.status === 'active' && m.user_id !== profile?.id
   );
 
+  // Opening the denounce modal with nothing to denounce is a dead end: you pick
+  // a comrade and are told there are no overdue tasks. Say so up front instead.
+  const canDenounce = eligibleAccused.length > 0 && overdueAssignments.length > 0;
+
+  async function handleInvite() {
+    if (!collective) return;
+    await Share.share({
+      message: `Join my Collective on Social Credit! Code: ${collective.code}`,
+    });
+  }
+
   async function handleDenounce() {
     if (!collective || !profile || !denounceAccusedId || !denounceAssignmentId) return;
     try {
@@ -162,8 +182,26 @@ export function CollectivePanel() {
       )}
 
       <View style={styles.buttonStack}>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => setShowDenounceModal(true)}>
+        <TouchableOpacity
+          style={[styles.actionBtn, !canDenounce && styles.actionBtnDisabled]}
+          onPress={() => setShowDenounceModal(true)}
+          disabled={!canDenounce}
+        >
           <Text style={styles.actionBtnText}>DENOUNCE A COMRADE!</Text>
+        </TouchableOpacity>
+        {!canDenounce && (
+          <Text style={styles.denounceHint}>
+            {eligibleAccused.length === 0
+              ? 'No other Comrades to denounce yet. Invite your household.'
+              : 'No Comrade has an overdue task. The Collective is in good order.'}
+          </Text>
+        )}
+
+        <TouchableOpacity
+          style={[styles.actionBtn, styles.actionBtnSecondary]}
+          onPress={handleInvite}
+        >
+          <Text style={[styles.actionBtnText, styles.actionBtnTextSecondary]}>INVITE COMRADES</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -253,6 +291,14 @@ const styles = StyleSheet.create({
   buttonStack: { gap: 10, marginTop: 24 },
   actionBtn: { backgroundColor: COLORS.primary, padding: 14, borderRadius: 0, alignItems: 'center' },
   actionBtnSecondary: { backgroundColor: 'transparent', borderWidth: 2, borderColor: COLORS.primary },
+  actionBtnDisabled: { opacity: 0.4 },
+  denounceHint: {
+    color: COLORS.muted,
+    fontSize: 12,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: -4,
+  },
   actionBtnText: { color: '#FFFFFF', fontWeight: '700', letterSpacing: 2, fontSize: 13 },
   actionBtnTextSecondary: { color: COLORS.primary },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
