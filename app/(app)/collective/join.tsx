@@ -6,7 +6,7 @@ import { PropagandaButton } from '../../../components/ui/PropagandaButton';
 import { PropagandaInput } from '../../../components/ui/PropagandaInput';
 import { CONFIG } from '../../../constants/config';
 import { COLORS } from '../../../constants/theme';
-import type { Collective } from '../../../lib/database.types';
+import type { CollectiveSummary } from '../../../lib/database.types';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useCollectiveStore } from '../../../store/useCollectiveStore';
 
@@ -16,7 +16,7 @@ export default function JoinCollectiveScreen() {
   const params = useLocalSearchParams<{ code?: string }>();
 
   const [code, setCode] = useState(params.code ?? '');
-  const [foundCollective, setFoundCollective] = useState<Collective | null>(null);
+  const [foundCollective, setFoundCollective] = useState<CollectiveSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState('');
@@ -58,7 +58,7 @@ export default function JoinCollectiveScreen() {
     if (!foundCollective || !profile) return;
     setJoining(true);
     try {
-      await joinCollective(foundCollective.id, profile.id);
+      await joinCollective(code, profile.id);
       router.replace('/(app)');
     } catch (err: any) {
       setError(err.message ?? 'Failed to join Collective');

@@ -98,6 +98,18 @@ async function runWeeklyReset(collectiveId: string) {
     }
   }
 
+  // Promote anyone who joined mid-week. join_collective_by_code() enrols a
+  // joiner as 'pending' unless they joined on a Monday in the collective's
+  // timezone (migration 013), and Monday 00:00 local is exactly now — so this is
+  // where they become active. Without this step a mid-week joiner stays pending
+  // indefinitely: they can see the collective but auto-assign skips them, so
+  // they never receive a task.
+  await supabase
+    .from('collective_members')
+    .update({ status: 'active' })
+    .eq('collective_id', collectiveId)
+    .eq('status', 'pending');
+
   // Create pending draft_state for the new week — auto-assign will fill it Sunday 14:00
   const nextWeekStart = getNextMonday();
   await supabase

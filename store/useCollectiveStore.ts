@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Collective, CollectiveMember, TaskPreference } from '../lib/database.types';
+import type { Collective, CollectiveMember, CollectiveSummary, TaskPreference } from '../lib/database.types';
 import { buildMemberJoinedPayload, checkAchievements } from '../lib/achievements';
 import { supabase } from '../lib/supabase';
 import { useAchievementStore } from './useAchievementStore';
@@ -11,17 +11,13 @@ interface CollectiveState {
   isLoading: boolean;
   fetchCollective: (collectiveId: string) => Promise<void>;
   createCollective: (name: string, timezone: string, rooms: Record<string, number>, creatorId: string) => Promise<string>;
-  lookupCollective: (code: string) => Promise<Collective>;
-  joinCollective: (collectiveId: string, userId: string) => Promise<void>;
+  lookupCollective: (code: string) => Promise<CollectiveSummary>;
+  joinCollective: (code: string, userId: string) => Promise<void>;
   leaveCollective: (collectiveId: string, userId: string) => Promise<void>;
   updateRooms: (collectiveId: string, rooms: Record<string, number>) => Promise<void>;
   subscribeToMembers: (collectiveId: string, userId?: string) => () => void;
   loadPreferences: (collectiveId: string, userId: string) => Promise<void>;
   savePreferences: (collectiveId: string, userId: string, rankedTaskIds: string[]) => Promise<void>;
-}
-
-function generateCode(length: number): string {
-  return Array.from({ length }, () => Math.floor(Math.random() * 10)).join('');
 }
 
 export const useCollectiveStore = create<CollectiveState>((set) => ({
@@ -39,65 +35,53 @@ export const useCollectiveStore = create<CollectiveState>((set) => ({
     set({ collective: collective ?? null, members: members ?? [], isLoading: false });
   },
 
-  createCollective: async (name, timezone, rooms, creatorId) => {
-    let code = '';
-    let attempts = 0;
-    while (attempts < 10) {
-      const candidate = generateCode(5);
-      const { data } = await supabase
-        .from('collectives')
-        .select('id')
-        .eq('code', candidate)
-        .maybeSingle();
-      if (!data) { code = candidate; break; }
-      attempts++;
-    }
-    if (!code) throw new Error('Could not generate unique collective code');
-
-    const { data: collective, error } = await supabase
-      .from('collectives')
-      .insert({ name, display_name: `${name} Collective`, code, timezone, created_by: creatorId, rooms })
-      .select()
-      .single();
+  // Code generation, the collective row and the creator's membership row are all
+  // done by create_collective() in one transaction — see migration 013. The old
+  // client-side version raced on the code (SELECT to check, then INSERT) and
+  // relied on a blanket SELECT policy over every collective to do the check.
+  createCollective: async (name, timezone, rooms, _creatorId) => {
+    const { data: collective, error } = await supabase.rpc('create_collective', {
+      p_name: name,
+      p_timezone: timezone,
+      p_rooms: rooms,
+    });
     if (error) throw error;
-
-    const { error: memberError } = await supabase
-      .from('collective_members')
-      .insert({ collective_id: collective.id, user_id: creatorId, status: 'active' });
-    if (memberError) throw memberError;
+    if (!collective) throw new Error('Could not create Collective');
 
     set({ collective });
     return collective.id;
   },
 
-  // Read-only lookup — does NOT insert membership
+  // Read-only lookup — does NOT insert membership.
+  // Goes through lookup_collective_by_code() because `collectives` is readable
+  // only by its own members; a prospective joiner is not one yet. The RPC
+  // returns id/name/display_name for one exact code match and nothing else.
   lookupCollective: async (code) => {
-    const { data: collective, error } = await supabase
-      .from('collectives')
-      .select('*')
-      .eq('code', code)
-      .single();
-    if (error || !collective) throw new Error('Collective not found');
-    return collective;
+    const { data, error } = await supabase.rpc('lookup_collective_by_code', {
+      p_code: code,
+    });
+    if (error) throw error;
+    const match = data?.[0];
+    if (!match) throw new Error('Collective not found');
+    return match;
   },
 
-  // Inserts membership — call only after the user has confirmed they want to join
-  joinCollective: async (collectiveId, userId) => {
-    const now = new Date();
-    const status = now.getDay() === 1 ? 'active' : 'pending';
+  // Inserts membership — call only after the user has confirmed they want to join.
+  // Takes the join code, not the collective id: possession of the code is what
+  // authorises the join, and that is now checked in the database rather than
+  // trusted from the client (migration 013). The RPC also decides active vs
+  // pending using the COLLECTIVE's timezone — the old client-side
+  // `now.getDay() === 1` used the device timezone, which contradicts the
+  // collective-timezone rule in CLAUDE.md.
+  joinCollective: async (code, userId) => {
+    const { data: collective, error } = await supabase.rpc('join_collective_by_code', {
+      p_code: code,
+    });
+    if (error) throw error;
+    if (!collective) throw new Error('Collective not found');
 
-    const { error: memberError } = await supabase
-      .from('collective_members')
-      .insert({ collective_id: collectiveId, user_id: userId, status });
-    if (memberError) throw memberError;
-
-    const { data: collective } = await supabase
-      .from('collectives')
-      .select('*')
-      .eq('id', collectiveId)
-      .single();
-
-    set({ collective: collective ?? null });
+    const collectiveId = collective.id;
+    set({ collective });
 
     buildMemberJoinedPayload(userId, collectiveId)
       .then((payload) => checkAchievements(userId, collectiveId, { type: 'member_joined', payload }))
@@ -105,12 +89,10 @@ export const useCollectiveStore = create<CollectiveState>((set) => ({
       .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
   },
 
-  leaveCollective: async (collectiveId, userId) => {
-    const { error } = await supabase
-      .from('collective_members')
-      .update({ status: 'left' })
-      .eq('collective_id', collectiveId)
-      .eq('user_id', userId);
+  leaveCollective: async (collectiveId, _userId) => {
+    const { error } = await supabase.rpc('leave_collective', {
+      p_collective_id: collectiveId,
+    });
     if (error) throw error;
     set({ collective: null, members: [] });
   },

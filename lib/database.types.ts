@@ -322,6 +322,37 @@ export interface Database {
         };
         Returns: undefined;
       };
+      // Collective membership — see 013_collective_join_hardening.sql.
+      // collective_members is not directly writable from the client; every
+      // transition goes through one of these.
+      lookup_collective_by_code: {
+        Args: { p_code: string };
+        Returns: { id: string; name: string; display_name: string }[];
+      };
+      join_collective_by_code: {
+        Args: { p_code: string };
+        Returns: Database['public']['Tables']['collectives']['Row'];
+      };
+      create_collective: {
+        Args: {
+          p_name: string;
+          p_timezone: string;
+          p_rooms?: Record<string, number>;
+        };
+        Returns: Database['public']['Tables']['collectives']['Row'];
+      };
+      pause_membership: {
+        Args: { p_collective_id: string };
+        Returns: undefined;
+      };
+      resume_membership: {
+        Args: { p_collective_id: string };
+        Returns: undefined;
+      };
+      leave_collective: {
+        Args: { p_collective_id: string };
+        Returns: undefined;
+      };
     };
     Enums: {
       [_ in never]: never;
@@ -336,6 +367,9 @@ export type Tables<T extends keyof Database['public']['Tables']> =
   Database['public']['Tables'][T]['Row'];
 export type Profile = Tables<'profiles'>;
 export type Collective = Tables<'collectives'>;
+/** What lookup_collective_by_code() returns to a prospective joiner — deliberately
+ *  not the whole row, and never the join code. See migration 013. */
+export type CollectiveSummary = Database['public']['Functions']['lookup_collective_by_code']['Returns'][number];
 export type CollectiveMember = Tables<'collective_members'>;
 export type TaskLibrary = Tables<'task_library'>;
 export type WeeklyAssignment = Tables<'weekly_assignments'>;

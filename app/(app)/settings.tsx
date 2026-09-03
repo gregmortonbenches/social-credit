@@ -73,22 +73,29 @@ export default function SettingsScreen() {
           {
             text: 'Confirm Pause',
             onPress: async () => {
-              await supabase
-                .from('collective_members')
-                .update({ status: 'paused', pause_started_at: new Date().toISOString() })
-                .eq('collective_id', collective.id)
-                .eq('user_id', profile.id);
+              // collective_members is not directly writable from the client —
+              // status transitions go through the RPCs added in migration 013,
+              // which check the current status before writing.
+              const { error } = await supabase.rpc('pause_membership', {
+                p_collective_id: collective.id,
+              });
+              if (error) {
+                Alert.alert('Could not pause', error.message);
+                return;
+              }
               await fetchCollective(collective.id);
             },
           },
         ]
       );
     } else {
-      await supabase
-        .from('collective_members')
-        .update({ status: 'active', pause_ended_at: new Date().toISOString() })
-        .eq('collective_id', collective.id)
-        .eq('user_id', profile.id);
+      const { error } = await supabase.rpc('resume_membership', {
+        p_collective_id: collective.id,
+      });
+      if (error) {
+        Alert.alert('Could not resume', error.message);
+        return;
+      }
       await fetchCollective(collective.id);
     }
   }
