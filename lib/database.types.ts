@@ -155,7 +155,7 @@ export interface Database {
           accuser_id: string;
           accused_id: string;
           assignment_id: string;
-          status: 'open' | 'responded' | 'auto_guilty' | 'voted' | 'resolved';
+          status: 'open' | 'responded' | 'auto_guilty' | 'voted' | 'resolved' | 'withdrawn';
           explanation: string | null;
           outcome: 'upheld' | 'dismissed' | null;
           created_at: string;
@@ -168,7 +168,7 @@ export interface Database {
           accuser_id: string;
           accused_id: string;
           assignment_id: string;
-          status?: 'open' | 'responded' | 'auto_guilty' | 'voted' | 'resolved';
+          status?: 'open' | 'responded' | 'auto_guilty' | 'voted' | 'resolved' | 'withdrawn';
           explanation?: string | null;
           outcome?: 'upheld' | 'dismissed' | null;
           created_at?: string;
@@ -176,7 +176,7 @@ export interface Database {
           resolved_at?: string | null;
         };
         Update: {
-          status?: 'open' | 'responded' | 'auto_guilty' | 'voted' | 'resolved';
+          status?: 'open' | 'responded' | 'auto_guilty' | 'voted' | 'resolved' | 'withdrawn';
           explanation?: string | null;
           outcome?: 'upheld' | 'dismissed' | null;
           responded_at?: string | null;
@@ -354,6 +354,12 @@ export interface Database {
       };
       leave_collective: {
         Args: { p_collective_id: string };
+        Returns: undefined;
+      };
+      /** Take back a denouncement you raised, while it is still unanswered.
+       *  See 016_denouncement_hardening.sql. */
+      withdraw_denouncement: {
+        Args: { p_denouncement_id: string };
         Returns: undefined;
       };
       /** Move one of your own outstanding tasks to another day of its week.

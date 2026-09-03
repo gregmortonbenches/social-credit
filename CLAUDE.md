@@ -244,9 +244,10 @@ RLS: users read/write only rows belonging to their collective. `credit_ledger` i
 
 ### Denounce! State Machine
 ```
-open → responded  (explanation submitted within 24h)
-          └→ resolved  (majority vote; tie = dismissed)
+open → responded   (explanation submitted within 24h)
+          └→ resolved   (majority vote; tie = dismissed)
      → auto_guilty  (no response in 24h)
+     → withdrawn    (accuser takes it back, only while still `open`)
 ```
 2-person collective: auto-upheld, no vote. Abuse tracking applies.
 
@@ -449,6 +450,8 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | 39 | Age gate record | The DOB was validated then discarded, so nothing showed the check had run. `profiles.age_verified_at` records when it passed; the date of birth is still not stored. The timestamp travels in sign-up metadata and `handle_new_user()` copies it into the profile, so it survives the email-confirmation round-trip where there is no client session to write with. Accounts predating this stay null. |
 | 40 | Credit total on Tasks | The Tasks panel shows the member's running `total_credits` under the title rule. `TaskCard` already floated a "+83" on completion, but nothing in the app accumulated, so the animation landed nowhere. `useTaskStore.completeTask` calls `useAuthStore.refreshProfile()` once `award-task-credits` resolves, because the award is applied server-side and the cached profile is stale until re-read. |
 | 41 | Auth wayfinding copy | Sign-in's heading and button both read "Report for Duty", and sign-up's both read "Enlist" — so neither screen contained the words a returning user scans for. The propaganda voice stays in the headings and buttons; a plain muted line underneath ("Sign in to your account" / "Create a new account") does the wayfinding, and the cross-links say plainly what they do. |
+| 42 | Denouncement writes and withdrawal | Migration 016. The accused's UPDATE policy was `USING (accused_id = auth.uid())` with no `WITH CHECK` over a table-wide grant, so the accused could set their own `outcome` and `status` — acquitting themselves before any vote. Now column-limited to `(explanation, status, responded_at)` with `WITH CHECK (status = 'responded')`. Adds a `withdrawn` status and `withdraw_denouncement`, usable by the accuser only while the case is still `open`; the row is kept rather than deleted so the two-person abuse counter still sees it, otherwise denounce-and-withdraw would be untracked harassment. The denounce modal now has a confirmation step naming the accused and the duty. |
+| 43 | Preference payoff | Own task cards show "YOUR 2ND CHOICE" or "NOT ONE OF YOUR PICKS" (the latter only once the member has ranked something, else it is noise), and the preferences screen explains that highest earners pick first. Ranking was the most effortful interaction in the app with no visible consequence. |
 | 27 | Onboarding flow | `app/(onboarding)/slide-1.tsx` contains all 3 slides as a FlatList. Navigation to the app is triggered by swiping past the last slide — a 4th invisible "ghost" slide (`ghost: true`) is appended to `SLIDES`; `onViewableItemsChanged` calls `markOnboarded()` when the ghost slide becomes visible. Dots only show for non-ghost slides (`VISIBLE_SLIDES`). No auto-advance, no button. |
 
 ---
@@ -473,6 +476,7 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | `013_collective_join_hardening.sql` | Closes the join-flow authorization hole (SECURITY-FINDINGS §1). `collectives` readable only by its own members; `collective_members` no longer client-writable. Adds `lookup_collective_by_code`, `join_collective_by_code`, `create_collective`, `pause_membership`, `resume_membership`, `leave_collective` as SECURITY DEFINER RPCs |
 | `014_assignment_write_hardening.sql` | Closes the `weekly_assignments` write hole (decision 38): revokes blanket UPDATE from `authenticated`, grants only `(status, completed_at)`, adds the missing `WITH CHECK`, and adds `reschedule_assignment` so members can move a task within its own week |
 | `015_age_verification.sql` | Adds `profiles.age_verified_at` and extends `handle_new_user()` to populate it from sign-up metadata (decision 39) |
+| `016_denouncement_hardening.sql` | Column-limits what the accused may write (they could previously set `outcome`/`status` and acquit themselves), adds the `withdrawn` status and `withdraw_denouncement` (decision 42) |
 
 **Two earlier migrations were repaired in place** (SECURITY-FINDINGS §4) because
 neither had ever been applicable: `001` created a `collectives` policy before the

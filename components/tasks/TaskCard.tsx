@@ -15,12 +15,25 @@ interface Props {
   readOnly?: boolean;
 }
 
+/** 1 -> "1ST", 2 -> "2ND", 3 -> "3RD", 4 -> "4TH", 11-13 -> "TH". */
+function ordinal(n: number): string {
+  const rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return `${n}TH`;
+  switch (n % 10) {
+    case 1: return `${n}ST`;
+    case 2: return `${n}ND`;
+    case 3: return `${n}RD`;
+    default: return `${n}TH`;
+  }
+}
+
 export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
   const completeTask = useTaskStore((s) => s.completeTask);
   const uncompleteTask = useTaskStore((s) => s.uncompleteTask);
   const rescheduleAssignment = useTaskStore((s) => s.rescheduleAssignment);
   const myAssignments = useTaskStore((s) => s.myAssignments);
   const timezone = useCollectiveStore((s) => s.collective?.timezone);
+  const taskPreferences = useCollectiveStore((s) => s.taskPreferences);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const isOverdue = new Date(assignment.due_date) < new Date() && assignment.status === 'pending';
@@ -47,6 +60,24 @@ export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
   const dueIsToday = isSameCollectiveDay(due, new Date(), tz);
   const dueLabel = dueIsToday ? 'TODAY' : collectiveWeekdayShort(due, tz).toUpperCase();
   const canReschedule = !readOnly && !isDone;
+
+  // Ranking tasks is the most effortful thing a member does, and until now the
+  // result was invisible: nothing ever said a task arrived because you asked for
+  // it. `taskPreferences` holds the current user's ranking, so this is only
+  // meaningful on their own cards, not on a comrade's.
+  const preferenceRank = readOnly
+    ? null
+    : taskPreferences.find((tp) => tp.task_id === assignment.task_id)?.rank ?? null;
+  // "Not one of your picks" only reads as information if the member has actually
+  // ranked something — otherwise it would sit on every card as noise for someone
+  // who has never opened the preferences screen.
+  const hasAnyPreferences = !readOnly && taskPreferences.length > 0;
+  const preferenceLabel =
+    preferenceRank !== null
+      ? `YOUR ${ordinal(preferenceRank)} CHOICE`
+      : hasAnyPreferences
+        ? 'NOT ONE OF YOUR PICKS'
+        : null;
 
   async function handleReschedule(day: string) {
     setPickerOpen(false);
@@ -136,13 +167,18 @@ export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
         style={styles.icon}
       />
 
-      <Text style={[
-        styles.taskName,
-        isDone && styles.taskNameDone,
-        isOverdue && styles.taskNameOverdue,
-      ]}>
-        {taskName}
-      </Text>
+      <View style={styles.nameCol}>
+        <Text style={[
+          styles.taskName,
+          isDone && styles.taskNameDone,
+          isOverdue && styles.taskNameOverdue,
+        ]}>
+          {taskName}
+        </Text>
+        {preferenceLabel && !isDone ? (
+          <Text style={styles.preferenceLabel}>{preferenceLabel}</Text>
+        ) : null}
+      </View>
 
       {canReschedule ? (
         <TouchableOpacity
@@ -246,7 +282,15 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono',
   },
   dueChipTextOverdue: { color: COLORS.danger },
-  taskName: { flex: 1, fontSize: 17, color: COLORS.text, fontWeight: '500' },
+  nameCol: { flex: 1 },
+  taskName: { fontSize: 17, color: COLORS.text, fontWeight: '500' },
+  preferenceLabel: {
+    color: COLORS.muted,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    marginTop: 2,
+  },
   taskNameDone: { textDecorationLine: 'line-through' },
   taskNameOverdue: { color: COLORS.danger },
   avatar: {

@@ -89,6 +89,7 @@ export function DenounceCard({
     auto_guilty: 'AUTO-GUILTY',
     voted: 'VOTES TALLIED',
     resolved: denouncement.outcome === 'upheld' ? 'UPHELD' : 'DISMISSED',
+    withdrawn: 'WITHDRAWN',
   }[denouncement.status] ?? denouncement.status.toUpperCase();
 
   const statusColor =

@@ -16,6 +16,8 @@ interface DenouncementState {
   fetchDenouncements: (collectiveId: string) => Promise<void>;
   createDenouncement: (collectiveId: string, accuserId: string, accusedId: string, assignmentId: string) => Promise<void>;
   submitExplanation: (denouncementId: string, explanation: string) => Promise<void>;
+  /** Accuser takes back an unanswered denouncement. No credits move. */
+  withdrawDenouncement: (denouncementId: string) => Promise<void>;
   castVote: (denouncementId: string, voterId: string, vote: 'uphold' | 'dismiss') => Promise<void>;
   subscribeToDenouncments: (collectiveId: string, userId?: string) => () => void;
 }
@@ -50,6 +52,18 @@ export const useDenouncementStore = create<DenouncementState>((set, get) => ({
       .then((payload) => checkAchievements(accuserId, collectiveId, { type: 'denounce_made', payload }))
       .then((unlocked) => { if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked); })
       .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
+  },
+
+  withdrawDenouncement: async (denouncementId) => {
+    const { error } = await supabase.rpc('withdraw_denouncement', {
+      p_denouncement_id: denouncementId,
+    });
+    if (error) throw error;
+    set((state) => ({
+      denouncements: state.denouncements.map((d) =>
+        d.id === denouncementId ? { ...d, status: 'withdrawn' as const } : d
+      ),
+    }));
   },
 
   submitExplanation: async (denouncementId, explanation) => {

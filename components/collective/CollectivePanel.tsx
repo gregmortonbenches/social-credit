@@ -12,11 +12,17 @@ import { useTaskStore } from '../../store/useTaskStore';
 import { DenounceCard } from '../denouncements/DenounceCard';
 import { WheatField } from './WheatField';
 
+/** Cases still in play — resolved and withdrawn ones drop off the panel. */
+function isActiveCase(d: { status: string }): boolean {
+  return d.status !== 'resolved' && d.status !== 'withdrawn';
+}
+
 export function CollectivePanel() {
   const collective = useCollectiveStore((s) => s.collective);
   const members = useCollectiveStore((s) => s.members);
   const profile = useAuthStore((s) => s.profile);
-  const { denouncements, fetchDenouncements, createDenouncement, myVotes } = useDenouncementStore();
+  const { denouncements, fetchDenouncements, createDenouncement, withdrawDenouncement, myVotes } =
+    useDenouncementStore();
   const allAssignments = useTaskStore((s) => s.allAssignments);
 
   const [profiles, setProfiles] = useState<MemberProfile[]>([]);
@@ -26,6 +32,7 @@ export function CollectivePanel() {
   const [showDenounceModal, setShowDenounceModal] = useState(false);
   const [denounceAccusedId, setDenounceAccusedId] = useState('');
   const [denounceAssignmentId, setDenounceAssignmentId] = useState('');
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (!collective) return;
@@ -122,6 +129,30 @@ export function CollectivePanel() {
     setShowDenounceModal(false);
     setDenounceAccusedId('');
     setDenounceAssignmentId('');
+    setConfirming(false);
+  }
+
+  // Denouncing is a public accusation against someone you live with, with a
+  // credit penalty and a 24-hour clock. It went off on a single tap.
+  function handleWithdraw(denouncementId: string, accusedName: string) {
+    Alert.alert(
+      'Withdraw the denunciation?',
+      `The case against Comrade ${accusedName} will be closed with no penalty to either of you.`,
+      [
+        { text: 'Keep it', style: 'cancel' },
+        {
+          text: 'Withdraw',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await withdrawDenouncement(denouncementId);
+            } catch (err: any) {
+              Alert.alert('Could not withdraw', err?.message ?? 'Please try again, Comrade.');
+            }
+          },
+        },
+      ]
+    );
   }
 
   const overdueAssignments: WeeklyAssignment[] = allAssignments.filter(
@@ -176,14 +207,14 @@ export function CollectivePanel() {
         </View>
       ))}
 
-      {denouncements.filter((d) => d.status !== 'resolved').length > 0 && (
+      {denouncements.filter(isActiveCase).length > 0 && (
         <>
           <Text style={styles.sectionTitle}>ACTIVE DENOUNCEMENTS</Text>
           {denouncements
-            .filter((d) => d.status !== 'resolved')
+            .filter(isActiveCase)
             .map((d) => (
+              <View key={d.id}>
               <DenounceCard
-                key={d.id}
                 denouncement={d}
                 accuserName={profileName(d.accuser_id)}
                 accusedName={profileName(d.accused_id)}
@@ -195,6 +226,17 @@ export function CollectivePanel() {
                 upholdCount={voteCount[d.id]?.uphold ?? 0}
                 dismissCount={voteCount[d.id]?.dismiss ?? 0}
               />
+              {d.accuser_id === profile?.id && d.status === 'open' ? (
+                <TouchableOpacity
+                  style={styles.withdrawBtn}
+                  onPress={() => handleWithdraw(d.id, profileName(d.accused_id))}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Withdraw the denunciation of Comrade ${profileName(d.accused_id)}`}
+                >
+                  <Text style={styles.withdrawText}>WITHDRAW THIS DENUNCIATION</Text>
+                </TouchableOpacity>
+              ) : null}
+              </View>
             ))}
         </>
       )}
@@ -276,16 +318,44 @@ export function CollectivePanel() {
               </>
             )}
 
+            {confirming ? (
+              <View style={styles.confirmBox}>
+                <Text style={styles.confirmText}>
+                  You are accusing{' '}
+                  <Text style={styles.confirmStrong}>Comrade {profileName(denounceAccusedId)}</Text>{' '}
+                  of failing{' '}
+                  <Text style={styles.confirmStrong}>
+                    {taskNames[
+                      accusedAssignments.find((a) => a.id === denounceAssignmentId)?.task_id ?? ''
+                    ] ?? 'this duty'}
+                  </Text>
+                  .
+                </Text>
+                <Text style={styles.confirmText}>
+                  The whole Collective will see it. They have{' '}
+                  {CONFIG.DENOUNCE_RESPONSE_WINDOW_HOURS} hours to answer, after which
+                  guilt is automatic. You can withdraw it until they reply.
+                </Text>
+              </View>
+            ) : null}
+
             <View style={styles.modalBtns}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={closeDenounceModal}>
-                <Text style={styles.cancelText}>CANCEL</Text>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={confirming ? () => setConfirming(false) : closeDenounceModal}
+                accessibilityRole="button"
+                accessibilityLabel={confirming ? 'Back' : 'Cancel'}
+              >
+                <Text style={styles.cancelText}>{confirming ? 'BACK' : 'CANCEL'}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.denounceBtn, (!denounceAccusedId || !denounceAssignmentId) && styles.denounceBtnDisabled]}
-                onPress={handleDenounce}
+                onPress={confirming ? handleDenounce : () => setConfirming(true)}
                 disabled={!denounceAccusedId || !denounceAssignmentId}
+                accessibilityRole="button"
+                accessibilityLabel={confirming ? 'Confirm the denunciation' : 'Review the denunciation'}
               >
-                <Text style={styles.denounceBtnText}>DENOUNCE!</Text>
+                <Text style={styles.denounceBtnText}>{confirming ? 'CONFIRM' : 'DENOUNCE!'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -333,4 +403,15 @@ const styles = StyleSheet.create({
   denounceBtn: { flex: 1, padding: 14, backgroundColor: COLORS.primary, borderRadius: 0, alignItems: 'center' },
   denounceBtnDisabled: { opacity: 0.5 },
   denounceBtnText: { color: '#FFFFFF', fontWeight: '700', letterSpacing: 1 },
+  withdrawBtn: { paddingVertical: 10, alignItems: 'center', marginTop: -6, marginBottom: 12 },
+  withdrawText: { color: COLORS.muted, fontSize: 11, fontWeight: '700', letterSpacing: 1.5 },
+  confirmBox: {
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    backgroundColor: COLORS.surface,
+    padding: 14,
+    marginTop: 16,
+  },
+  confirmText: { color: COLORS.text, fontSize: 13, lineHeight: 20, marginBottom: 8 },
+  confirmStrong: { fontWeight: '700', color: COLORS.primary },
 });

@@ -249,6 +249,13 @@ export default function PreferencesScreen() {
         <Text style={styles.subtitle}>
           Use people according to their abilities.
         </Text>
+        {/* Ranking is the most effortful thing a member does here, and nothing
+            said what it buys them. */}
+        <Text style={styles.explainer}>
+          Duties are assigned every Sunday. Whoever earned the most credits last
+          week picks first, and each Comrade receives their highest-ranked task
+          still unclaimed. Your picks are then marked on your task cards.
+        </Text>
 
         {displayedTasks.length > 0 && (
           <>
@@ -314,6 +321,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 26,
     marginBottom: 24,
+  },
+  explainer: {
+    color: COLORS.text,
+    fontSize: 13,
+    lineHeight: 20,
+    backgroundColor: COLORS.surface,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    padding: 12,
+    marginBottom: 16,
   },
   sectionLabel: {
     color: COLORS.accent,
