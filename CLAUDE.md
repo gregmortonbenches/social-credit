@@ -50,6 +50,8 @@ This is currently a private project for personal use. It is not a commercial pro
 
 **RLS must be enforced.** Users may only read/write rows where `collective_id` matches a collective they are an active member of. Never bypass Row Level Security from client code.
 
+**Never write `collective_members` from the client.** The table has no INSERT or UPDATE policy for `authenticated` (migration 013). Joining, creating, pausing, resuming and leaving all go through the SECURITY DEFINER RPCs, which check the *current* status before writing — something a `WITH CHECK` clause cannot do. Do not add a policy to "fix" a permission error here; add or extend an RPC.
+
 **Age gate is mandatory.** Sign-up must block users under 16 via a date-of-birth field check.
 
 **FCM is for delivery only.** Never use Firestore, Firebase Auth, or Firebase Cloud Functions. Use only the `firebase-admin` SDK within Supabase Edge Functions to send FCM messages.
@@ -137,10 +139,8 @@ export const CONFIG = {
   DENOUNCE_RESPONSE_WINDOW_HOURS: 24,
   DENOUNCE_EXPLANATION_MAX_WORDS: 300,
 
-  // Draft
-  DRAFT_START_HOUR: 14,
-  DRAFT_END_HOUR: 23,
-  DRAFT_TURN_TIMEOUT_MINUTES: 60,
+  // Auto-assignment (Sunday, collective timezone) — see Decision 19
+  AUTO_ASSIGN_HOUR: 14,
 
   // Collective
   COLLECTIVE_CODE_LENGTH: 5,
@@ -207,7 +207,7 @@ RLS: users read/write only rows belonging to their collective. `credit_ledger` i
 
 ### Credit Economy
 - Credit value per task = `WEEKLY_CREDIT_POOL / total_tasks_this_week` — calculated at draft close, stored per assignment
-- Task complete: `+credits_value` — awarded immediately on completion via `awardTaskCredits()` in `useTaskStore.completeTask`; `weekly-reset` has a dedup check and acts as fallback if the client call fails
+- Task complete: `+credits_value` — awarded immediately on completion via `awardTaskCredits()` in `useTaskStore.completeTask`, which calls the `award-task-credits` Edge Function (the client cannot call `credits_transaction` directly — it is revoked from `authenticated`). `weekly-reset` runs the same dedup check and is a genuine fallback if that call fails
 - Task failed: `-credits_value` (symmetrical) — deducted by `weekly-reset` when assignment is marked failed at Monday 00:00
 - Denouncement upheld: accused `-credits_value`, accuser `+DENOUNCE_ACCUSER_REWARD`
 - Denouncement dismissed: accuser `-DENOUNCE_ACCUSER_PENALTY`
@@ -248,6 +248,7 @@ open → responded  (explanation submitted within 24h)
 
 ### Mid-Week Join
 - Status: `pending` until Monday 00:00. Starting credits: 500. No tasks until first full week.
+- Set by `join_collective_by_code()`, which decides active vs pending from the **collective's** timezone, and cleared by `weekly-reset`, which promotes every `pending` member to `active` at the Monday reset.
 
 ### Account Deletion
 1. Hard delete: auth record, email, push token, achievements, profile (immediate — no grace period yet)
@@ -266,6 +267,7 @@ open → responded  (explanation submitted within 24h)
 | `denounce-timeout` | Cron hourly | Deployed | Apply auto-guilt to unanswered denouncements |
 | `send-notification` | HTTP (called by other functions) | Deployed | Send FCM push via firebase-admin — requires `Authorization: Bearer <SERVICE_ROLE_KEY>` header |
 | `delete-account` | HTTP (called by client) | Deployed | Called by client with user JWT; uses service role internally |
+| `award-task-credits` | HTTP (called by client) | Deployed | Settles completion credits immediately. User JWT; verifies caller owns the assignment, reads the amount from the row, idempotent against `credit_ledger` |
 
 Timezone note: crons run UTC. Each function computes the collective's local time using its IANA timezone string and `date-fns-tz`. Never hardcode UTC offsets.
 
@@ -369,9 +371,24 @@ Custom tasks proposed via in-app vote, stored in `task_library` with `is_custom:
 ```
 EXPO_PUBLIC_SUPABASE_URL           Supabase project URL (safe for client)
 EXPO_PUBLIC_SUPABASE_ANON_KEY      Supabase anon key (safe for client)
-SUPABASE_SERVICE_ROLE_KEY          Edge Functions only — never in app bundle
-FCM_SERVER_KEY                     Edge Functions only — never in app bundle
 ```
+
+Those two are the **only** values that go in `.env.local`. Anything prefixed
+`EXPO_PUBLIC_` is compiled into the shipped bundle, so a secret placed there is
+public.
+
+Edge Function secrets are set with `supabase secrets set` and never appear in
+any `.env` file:
+
+```
+FIREBASE_SERVICE_ACCOUNT_JSON      Full Firebase service account JSON, single-line
+```
+
+`SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected
+into Edge Functions by Supabase automatically — do not set them yourself.
+
+There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024;
+`send-notification` uses `firebase-admin`, which requires a service account.
 
 `.env` is gitignored. Keep `.env.example` up to date with all keys listed but empty.
 
@@ -410,6 +427,8 @@ FCM_SERVER_KEY                     Edge Functions only — never in app bundle
 | 28 | Avatar colours | `AVATAR_COLORS` and `avatarColor()` are defined once in `constants/theme.ts` and imported by `TaskCard.tsx` and `ScoreboardPanel.tsx`. Palette is drawn from 1950s Chinese propaganda poster aesthetics: propaganda blue `#1B4F8C`, harvest gold `#C87F00`, peasant green `#2B7A2B`, vermillion `#C14A14`, teal `#006B72`, mauve `#7A3070`. |
 | 29 | Date of birth input | Sign-up DOB field uses `DD-MM-YYYY` format with a numeric keyboard. Dashes are auto-inserted after the day and month digits via `formatDob()` — users type digits only. Validation parses the three parts and checks age ≥ 16. |
 | 30 | Room defaults | Create collective room stepper defaults all room types to 1 (not 0) — users are likely to have at least one of each. They can reduce to 0 or increase via the ±  stepper. |
+| 31 | Collective membership writes | `collective_members` has no client INSERT/UPDATE policy. `create_collective`, `join_collective_by_code`, `pause_membership`, `resume_membership` and `leave_collective` are SECURITY DEFINER RPCs (migration 013). Joining takes the **code**, not a collective id — possession of the code is the capability, checked in the DB. Active-vs-pending is decided from the collective's timezone, server-side. |
+| 32 | Immediate task credits | `credits_transaction` stays revoked from `authenticated`. `award-task-credits` Edge Function settles completion credits with a user JWT: verifies ownership, reads the amount from the row, idempotent against `credit_ledger`. `weekly-reset` remains the fallback. |
 | 27 | Onboarding flow | `app/(onboarding)/slide-1.tsx` contains all 3 slides as a FlatList. Navigation to the app is triggered by swiping past the last slide — a 4th invisible "ghost" slide (`ghost: true`) is appended to `SLIDES`; `onViewableItemsChanged` calls `markOnboarded()` when the ghost slide becomes visible. Dots only show for non-ghost slides (`VISIBLE_SLIDES`). No auto-advance, no button. |
 
 ---
@@ -431,6 +450,14 @@ FCM_SERVER_KEY                     Edge Functions only — never in app bundle
 | `010_collective_public_lookup.sql` | Adds SELECT policy allowing any authenticated user to read from `collectives` — required for non-members to look up a collective by code before joining, and for code-collision checks during collective creation |
 | `011_pending_member_visibility.sql` | Relaxes `collective_members` and `profiles` SELECT policies from `status = 'active'` to `status IN ('active', 'paused', 'pending')` — mid-week joiners have `pending` status until Monday and were invisible to the collective and to themselves. NOTE: introduced infinite recursion — fixed in 012 |
 | `012_fix_recursion_from_011.sql` | Fixes infinite recursion (code 42P17) introduced by 011. Updates `get_user_collective_ids()` SECURITY DEFINER function to include `pending`/`paused` statuses (the intent of 011), then restores both `collective_members` and `profiles` SELECT policies to use that function instead of direct self-referencing subqueries |
+| `013_collective_join_hardening.sql` | Closes the join-flow authorization hole (SECURITY-FINDINGS §1). `collectives` readable only by its own members; `collective_members` no longer client-writable. Adds `lookup_collective_by_code`, `join_collective_by_code`, `create_collective`, `pause_membership`, `resume_membership`, `leave_collective` as SECURITY DEFINER RPCs |
+
+**Two earlier migrations were repaired in place** (SECURITY-FINDINGS §4) because
+neither had ever been applicable: `001` created a `collectives` policy before the
+`collective_members` table it references, and `009` used a set-returning function
+directly in a policy expression. Both errored on a fresh database. The chain
+001 → 013 now applies cleanly to an empty database. An existing project is likely
+missing 009's DELETE grant and policy — re-run it there.
 
 ---
 
@@ -451,5 +478,5 @@ FCM_SERVER_KEY                     Edge Functions only — never in app bundle
 - `rally_the_peasants` + `propaganda` achievements not triggerable — require invite tracking, no schema support
 - Draft achievements (`production_team`, `production_brigade`, `planned_economy`) — need wiring inside `auto-assign` Edge Function
 - `subscribeToDenouncments` not yet mounted in any component — when connected, must pass `userId` as second argument to enable resolution achievement checks
-- Dev-only "Force Assign Tasks" button in Settings (`__DEV__` gated, never ships) — upserts a pending `draft_state` for the current week then calls `auto-assign` with `{ force: true }`. The Edge Function accepts `force: true` in the request body to bypass the Sunday/14:00 time check
+- Dev-only "Force Assign Tasks" button in Settings (`__DEV__` gated, never ships) — upserts a pending `draft_state` for the current week then calls `auto-assign` with `{ force: true }`. The Edge Function accepts `force: true` in the request body to bypass the Sunday/14:00 time check. **Currently non-functional:** `auto-assign` now requires the service role key (SECURITY-FINDINGS §2), which the client does not have and must not have. Invoke the function directly with the service role key when testing, or give it a dev-only path that is not reachable in production
 - Account deletion: `task_preferences` rows not cleaned up, no 30-day grace period (`deleted_at` field exists in schema but is unused)
