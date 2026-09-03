@@ -11,6 +11,8 @@ interface TaskState {
   allAssignments: WeeklyAssignment[];
   weekStart: string | null;
   isLoading: boolean;
+  /** Last fetch failure, for the panel to surface. Null once a fetch succeeds. */
+  error: string | null;
   fetchAssignments: (collectiveId: string, userId: string, timezone: string) => Promise<void>;
   completeTask: (assignmentId: string) => Promise<void>;
   uncompleteTask: (assignmentId: string) => Promise<void>;
@@ -22,6 +24,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   allAssignments: [],
   weekStart: null,
   isLoading: false,
+  error: null,
 
   // `week_start` is the Monday of the week in the COLLECTIVE's timezone, so the
   // query has to be built in that timezone too. The old device-local helper also
@@ -37,13 +40,24 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       .select('*')
       .eq('collective_id', collectiveId)
       .eq('week_start', weekStart);
-    if (error) throw error;
+
+    // Previously this threw, from inside an unawaited useEffect call with no
+    // catch. isLoading was never cleared, so one failed request — a dropped
+    // connection, a paused Supabase project — left the Tasks panel blank and
+    // spinning forever with no way back short of restarting the app. Record the
+    // failure instead so the panel can show it and offer a retry.
+    if (error) {
+      set({ isLoading: false, error: error.message });
+      return;
+    }
+
     const all = data ?? [];
     set({
       allAssignments: all,
       myAssignments: all.filter((a) => a.user_id === userId),
       weekStart,
       isLoading: false,
+      error: null,
     });
   },
 

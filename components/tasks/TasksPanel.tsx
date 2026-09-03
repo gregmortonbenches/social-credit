@@ -14,7 +14,7 @@ import { TaskCard } from './TaskCard';
 
 export function TasksPanel() {
   const profile = useAuthStore((s) => s.profile);
-  const { myAssignments, allAssignments, fetchAssignments, isLoading } = useTaskStore();
+  const { myAssignments, allAssignments, fetchAssignments, isLoading, error } = useTaskStore();
   const collective = useCollectiveStore((s) => s.collective);
   const members = useCollectiveStore((s) => s.members);
   const fetchCollective = useCollectiveStore((s) => s.fetchCollective);
@@ -42,7 +42,13 @@ export function TasksPanel() {
   }, [collective?.id, profile?.id]);
 
   async function loadTaskLibrary() {
-    const { data } = await supabase.from('task_library').select('*');
+    const { data, error: libError } = await supabase.from('task_library').select('*');
+    // Swallowing this left every task card showing the placeholder em-dash with
+    // no indication anything had gone wrong.
+    if (libError) {
+      if (__DEV__) console.warn('[tasks] task library load failed:', libError.message);
+      return;
+    }
     if (data) {
       setTaskLibrary(Object.fromEntries(data.map((t) => [t.id, t])));
     }
@@ -90,12 +96,23 @@ export function TasksPanel() {
         />
       </View>
       <View style={styles.content}>
-      <Text style={styles.bannerText}>TASKS</Text>
+      <Text style={styles.bannerText} accessibilityRole="header">TASKS</Text>
       <View style={styles.titleRule} />
+
+      {error ? (
+        <View style={styles.errorCard}>
+          <Text style={styles.errorHeading}>CANNOT REACH THE COLLECTIVE</Text>
+          <Text style={styles.errorBody}>
+            Your duties could not be loaded. Check your connection and pull down to
+            try again, Comrade.
+          </Text>
+          <Text style={styles.errorDetail}>{error}</Text>
+        </View>
+      ) : null}
 
       {/* `isLoading` guard so the notice does not flash during the first fetch,
           when myAssignments is legitimately empty but about to be filled. */}
-      {myAssignments.length === 0 && !isLoading ? (
+      {myAssignments.length === 0 && !isLoading && !error ? (
         <NoAssignmentsNotice
           isPending={myStatus === 'pending'}
           timezone={collective?.timezone}
@@ -191,6 +208,8 @@ function NoAssignmentsNotice({ isPending, timezone }: { isPending: boolean; time
       <TouchableOpacity
         style={noticeStyles.btn}
         onPress={() => router.push('/(app)/collective/preferences')}
+        accessibilityRole="button"
+        accessibilityLabel="Set my task preferences"
       >
         <Text style={noticeStyles.btnText}>SET MY TASK PREFERENCES</Text>
       </TouchableOpacity>
@@ -246,14 +265,30 @@ function Section({
 }) {
   const [collapsed, setCollapsed] = useState(collapsible ?? false);
 
+  // A Text with onPress is not announced as a control and has no tap target
+  // beyond the glyphs themselves. Collapsible sections get a real button.
   return (
     <View style={sectionStyles.container}>
-      <Text
-        style={[sectionStyles.title, titleColor ? { color: titleColor } : null]}
-        onPress={collapsible ? () => setCollapsed((v) => !v) : undefined}
-      >
-        {title} {collapsible ? (collapsed ? '▸' : '▾') : ''}
-      </Text>
+      {collapsible ? (
+        <TouchableOpacity
+          onPress={() => setCollapsed((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={title}
+          accessibilityState={{ expanded: !collapsed }}
+          hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+        >
+          <Text style={[sectionStyles.title, titleColor ? { color: titleColor } : null]}>
+            {title} {collapsed ? '▸' : '▾'}
+          </Text>
+        </TouchableOpacity>
+      ) : (
+        <Text
+          style={[sectionStyles.title, titleColor ? { color: titleColor } : null]}
+          accessibilityRole="header"
+        >
+          {title}
+        </Text>
+      )}
       {!collapsed && children}
     </View>
   );
@@ -279,4 +314,20 @@ const styles = StyleSheet.create({
   bannerText: { color: COLORS.primary, fontWeight: '900', letterSpacing: 3, fontSize: 26, marginBottom: 10, textAlign: 'center' },
   titleRule: { height: 3, backgroundColor: COLORS.primary, marginBottom: 20 },
   empty: { color: COLORS.muted, fontSize: 13, fontStyle: 'italic', textAlign: 'center', paddingVertical: 8 },
+  errorCard: {
+    borderTopWidth: 4,
+    borderTopColor: COLORS.danger,
+    backgroundColor: COLORS.surface,
+    padding: 18,
+    marginBottom: 24,
+  },
+  errorHeading: {
+    color: COLORS.danger,
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginBottom: 10,
+  },
+  errorBody: { color: COLORS.text, fontSize: 14, lineHeight: 22 },
+  errorDetail: { color: COLORS.muted, fontSize: 11, marginTop: 10, fontFamily: 'SpaceMono' },
 });
