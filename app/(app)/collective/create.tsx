@@ -109,11 +109,26 @@ export default function CreateCollectiveScreen() {
               <View key={room.key} style={styles.roomRow}>
                 <Text style={styles.roomLabel}>{room.label}</Text>
                 <View style={styles.stepper}>
-                  <TouchableOpacity style={styles.stepBtn} onPress={() => adjustRoom(room.key, -1)}>
+                  <TouchableOpacity
+                    style={styles.stepBtn}
+                    onPress={() => adjustRoom(room.key, -1)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove one ${room.label}`}
+                  >
                     <Text style={styles.stepBtnText}>−</Text>
                   </TouchableOpacity>
-                  <Text style={styles.stepValue}>{rooms[room.key]}</Text>
-                  <TouchableOpacity style={styles.stepBtn} onPress={() => adjustRoom(room.key, 1)}>
+                  <Text
+                    style={styles.stepValue}
+                    accessibilityLabel={`${rooms[room.key]} ${room.label}`}
+                  >
+                    {rooms[room.key]}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.stepBtn}
+                    onPress={() => adjustRoom(room.key, 1)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add one ${room.label}`}
+                  >
                     <Text style={styles.stepBtnText}>+</Text>
                   </TouchableOpacity>
                 </View>
@@ -203,8 +218,8 @@ const styles = StyleSheet.create({
   roomLabel: { color: COLORS.text, fontSize: 16 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   stepBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     backgroundColor: COLORS.surface,
     borderRadius: 0,
     alignItems: 'center',

@@ -21,10 +21,21 @@ export function PropagandaInput({ label, error, style, showToggle, secureTextEnt
           style={[styles.input, error ? styles.inputError : null, showToggle && styles.inputWithToggle, style]}
           placeholderTextColor={COLORS.muted}
           secureTextEntry={isSecure}
+          // The visible label is a sibling Text, which a screen reader does not
+          // associate with the field — without this the input is announced with
+          // no name. The error is read out as the field's current state.
+          accessibilityLabel={label}
+          accessibilityHint={error || undefined}
           {...rest}
         />
         {showToggle && (
-          <TouchableOpacity style={styles.eyeBtn} onPress={() => setHidden((v) => !v)}>
+          <TouchableOpacity
+            style={styles.eyeBtn}
+            onPress={() => setHidden((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={hidden ? 'Show password' : 'Hide password'}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
             <Ionicons name={hidden ? 'eye-outline' : 'eye-off-outline'} size={20} color={COLORS.muted} />
           </TouchableOpacity>
         )}
@@ -48,8 +59,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     color: COLORS.text,
     borderWidth: 1,
-    borderColor: '#3D2020',
-    borderRadius: 4,
+    borderColor: COLORS.muted,
+    borderRadius: 0,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,

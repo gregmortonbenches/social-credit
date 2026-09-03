@@ -18,6 +18,12 @@ export function PropagandaButton({ title, loading, variant = 'primary', style, d
       style={[styles.base, { backgroundColor: bg, borderColor, opacity: disabled || loading ? 0.6 : 1 }, style]}
       disabled={disabled || loading}
       activeOpacity={0.75}
+      // Screen readers otherwise announce this as an unlabelled view. The title
+      // is the label unless a caller overrides it, and `busy` stops VoiceOver
+      // reading a spinner as an actionable control.
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
       {...rest}
     >
       {loading ? (

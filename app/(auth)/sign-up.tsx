@@ -149,7 +149,14 @@ export default function SignUpScreen() {
           error={errors.dob}
         />
 
-        <TouchableOpacity style={styles.checkRow} onPress={() => setAgreed((v) => !v)}>
+        <TouchableOpacity
+          style={styles.checkRow}
+          onPress={() => setAgreed((v) => !v)}
+          accessibilityRole="checkbox"
+          accessibilityLabel="I agree to the Privacy Policy and Terms of Service"
+          accessibilityState={{ checked: agreed }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
             {agreed ? <Text style={styles.checkmark}>✓</Text> : null}
           </View>
@@ -161,7 +168,11 @@ export default function SignUpScreen() {
 
         <PropagandaButton title="Enlist!" onPress={handleSignUp} loading={loading} style={styles.btn} />
 
-        <TouchableOpacity onPress={() => router.replace('/(auth)/sign-in')}>
+        <TouchableOpacity
+          onPress={() => router.replace('/(auth)/sign-in')}
+          accessibilityRole="link"
+          accessibilityLabel="Already a Comrade? Sign in"
+        >
           <Text style={styles.link}>Already a Comrade? Sign In</Text>
         </TouchableOpacity>
       </ScrollView>

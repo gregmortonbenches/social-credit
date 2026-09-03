@@ -115,14 +115,21 @@ export default function HomeScreen() {
         keyExtractor={(_, i) => String(i)}
       />
 
-      <View style={styles.dotRow}>
-        {PANELS.map((_, i) => (
+      {/* These dots are the only way to navigate between panels (decision 17), so
+          they need a real tap target and a name. The dot itself stays 10px; the
+          touchable around it is 44x44, the platform minimum. */}
+      <View style={styles.dotRow} accessibilityRole="tablist">
+        {PANELS.map((label, i) => (
           <TouchableOpacity
             key={i}
+            style={styles.dotHit}
             onPress={() => {
               listRef.current?.scrollToIndex({ index: i, animated: true });
               setPanelIndex(i);
             }}
+            accessibilityRole="tab"
+            accessibilityLabel={`${label} panel`}
+            accessibilityState={{ selected: i === panelIndex }}
           >
             <View style={[styles.dot, i === panelIndex && styles.dotActive]} />
           </TouchableOpacity>
@@ -142,6 +149,8 @@ export default function HomeScreen() {
             </Text>
             <TouchableOpacity
               style={styles.modalPrimaryBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Set my task preferences"
               onPress={() => {
                 dismissPrefsModal();
                 router.push('/(app)/collective/preferences');
@@ -149,7 +158,12 @@ export default function HomeScreen() {
             >
               <Text style={styles.modalPrimaryText}>SET MY PREFERENCES</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.modalSecondaryBtn} onPress={dismissPrefsModal}>
+            <TouchableOpacity
+              style={styles.modalSecondaryBtn}
+              onPress={dismissPrefsModal}
+              accessibilityRole="button"
+              accessibilityLabel="Later"
+            >
               <Text style={styles.modalSecondaryText}>LATER</Text>
             </TouchableOpacity>
           </View>
@@ -168,17 +182,29 @@ function NoCollectiveLanding({ username }: { username: string }) {
       )}
       <Text style={styles.landingPrompt}>You belong to no collective. Choose your path.</Text>
 
-      <TouchableOpacity style={styles.landingBtn} onPress={() => router.push('/(app)/collective/create')}>
+      <TouchableOpacity
+        style={styles.landingBtn}
+        onPress={() => router.push('/(app)/collective/create')}
+        accessibilityRole="button"
+        accessibilityLabel="Create a Collective"
+      >
         <Text style={styles.landingBtnText}>★ CREATE A COLLECTIVE</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.landingBtn, styles.landingBtnSecondary]}
         onPress={() => router.push('/(app)/collective/join')}
+        accessibilityRole="button"
+        accessibilityLabel="Join a Collective"
       >
         <Text style={[styles.landingBtnText, styles.landingBtnTextSecondary]}>JOIN A COLLECTIVE</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.landingSignOut} onPress={signOut}>
+      <TouchableOpacity
+        style={styles.landingSignOut}
+        onPress={signOut}
+        accessibilityRole="button"
+        accessibilityLabel="Sign out"
+      >
         <Text style={styles.landingSignOutText}>Sign out</Text>
       </TouchableOpacity>
     </View>
@@ -219,9 +245,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 14,
     backgroundColor: COLORS.background,
+  },
+  dotHit: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dot: {
     width: 10,

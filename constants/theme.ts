@@ -17,15 +17,30 @@ export function avatarColor(userId: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
+// Contrast note (WCAG 2.1 AA: 4.5:1 for text below 14pt bold / 18pt regular).
+// `muted`, `danger` and `success` all appear at 11-13px, so each is held to 4.5
+// against BOTH grounds — `surface` is the harder of the two and sets the value.
+//   muted   #6F6052  4.53 on surface, 5.03 on background  (was #7A6A5A: 3.90 / 4.32)
+//   danger  #BD2717  4.54 on surface, 5.03 on background  (was #E74C3C: 2.86 / 3.17)
+//   success #19713E  4.53 on surface, 5.02 on background  (was #27AE60: 2.15 / 2.39)
+// Each is the smallest darkening of the original that clears the threshold, so
+// the hues are unchanged.
+//
+// `primary` is deliberately NOT adjusted: it is the brand red fixed by decision
+// 15. It passes on `background` (4.89) but sits just under on `surface` (4.41),
+// which affects red-on-surface section headers such as COMRADE STANDINGS. If you
+// want that to clear AA too, #C20000 does it (4.78 on surface, 5.30 on
+// background, 6.38 for white-on-red) and is visually indistinguishable — but it
+// is a brand decision, not an accessibility one, so it is left to you.
 export const COLORS = {
   primary: '#CC0000',
   accent: '#000000',
   background: '#F0EAD6',
   surface: '#E8DECA',
   text: '#000000',
-  muted: '#7A6A5A',
-  success: '#27AE60',
-  danger: '#E74C3C',
+  muted: '#6F6052',
+  success: '#19713E',
+  danger: '#BD2717',
 } as const;
 
 export const TYPOGRAPHY = {
