@@ -43,7 +43,10 @@ Wait for the project to initialize (2-3 minutes).
 2. Copy:
    - `Project URL` → `EXPO_PUBLIC_SUPABASE_URL`
    - `anon public` key → `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-   - `service_role secret` → `SUPABASE_SERVICE_ROLE_KEY`
+
+You do **not** need to copy the `service_role secret` anywhere. It grants full
+read/write over every table with RLS bypassed; Supabase injects it into Edge
+Functions for you. It must never be put in a file the app reads.
 
 ### Set Up the Database
 
@@ -68,27 +71,30 @@ Create `.env.local` in the project root:
 cp .env.example .env.local
 ```
 
-Edit `.env.local` and add your Supabase credentials:
+Edit `.env.local` and add your Supabase credentials. These are the **only** two
+values that belong in this file — everything prefixed `EXPO_PUBLIC_` is compiled
+into the shipped app bundle and can be read by anyone who downloads it:
 
 ```env
 EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-FCM_SERVER_KEY=
 ```
 
 ### Firebase Cloud Messaging (Optional)
 
-For push notifications, you'll need FCM:
+For push notifications, you'll need a Firebase **service account**. Google shut
+down the legacy "FCM server key" API in 2024, and `send-notification` uses
+`firebase-admin`, which authenticates with a service account JSON:
 
 1. Create a [Firebase project](https://firebase.google.com/console)
 2. Go to **Project Settings** → **Service Accounts**
-3. Generate a new private key
-4. Extract the `server_key` value
-5. Add to `.env.local`:
-   ```env
-   FCM_SERVER_KEY=your-key-here
+3. Click **Generate new private key** — this downloads a JSON file
+4. Set it as an Edge Function secret, as a single-line string:
+   ```bash
+   supabase secrets set FIREBASE_SERVICE_ACCOUNT_JSON="$(cat service-account.json)"
    ```
+
+This is a server-side secret. It does not go in `.env.local`.
 
 Without FCM, the app runs fine but notifications won't work.
 

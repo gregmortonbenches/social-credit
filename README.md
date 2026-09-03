@@ -50,15 +50,26 @@ A gamified credit system mobile app for households ("Collectives") to manage dom
    ```bash
    cp .env.example .env.local
    ```
-   Fill in your Supabase and FCM credentials:
+   `.env.local` holds **only** the two client-side values. Anything prefixed
+   `EXPO_PUBLIC_` is compiled into the app bundle and is readable by anyone who
+   downloads it, so no secret may ever live in this file:
    ```env
    EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
    EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-   FCM_SERVER_KEY=your-fcm-server-key
    ```
 
-3. **Run the app:**
+3. **Edge Function secrets** (server-side only — never in `.env.local`):
+   ```bash
+   supabase secrets set FIREBASE_SERVICE_ACCOUNT_JSON="$(cat service-account.json)"
+   ```
+   `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are
+   injected into Edge Functions by Supabase automatically — you do not set them.
+
+   Push delivery uses a **Firebase service account JSON**, not a legacy "FCM
+   server key"; Google shut the legacy server-key API down in 2024. Get one from
+   Firebase console → Project settings → Service accounts → Generate new key.
+
+4. **Run the app:**
    ```bash
    npm start          # Interactive Expo menu
    npm run ios        # iOS simulator
