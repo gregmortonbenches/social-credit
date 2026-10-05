@@ -107,7 +107,15 @@ WITH checks(ord, migration, adds, present) AS (VALUES
    'credits_transaction not callable by PUBLIC   [CRITICAL]',
    EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'credits_transaction')
    AND NOT (SELECT coalesce(array_to_string(proacl, ',') LIKE '=X/%', true)
-            FROM pg_proc WHERE proname = 'credits_transaction'))
+            FROM pg_proc WHERE proname = 'credits_transaction')),
+
+  (18, '019_collective_prosperity',
+   'collectives.prosperity_streak, not client-writable   [SECURITY]',
+   EXISTS (SELECT 1 FROM information_schema.columns
+           WHERE table_name = 'collectives' AND column_name = 'prosperity_streak')
+   AND NOT EXISTS (SELECT 1 FROM information_schema.column_privileges
+                   WHERE grantee = 'authenticated' AND table_name = 'collectives'
+                     AND column_name = 'prosperity_streak' AND privilege_type = 'UPDATE'))
 )
 SELECT
   migration,

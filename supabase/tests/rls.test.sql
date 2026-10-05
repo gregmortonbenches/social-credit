@@ -205,4 +205,27 @@ SELECT assert(
 FROM pg_proc WHERE proname = 'credits_transaction';
 
 \echo ''
+\echo '--- collectives: prosperity is server-owned (migration 019) ---'
+-- Alice founded the collective, so the update POLICY would allow her to write
+-- any column; only the column-level grant stops her.
+SELECT assert(
+  refused_as('00000000-0000-0000-0000-0000000000a1',
+    'UPDATE collectives SET prosperity_streak = 99'),
+  'the founder cannot set the Collective''s own prosperity streak');
+
+SELECT assert(
+  refused_as('00000000-0000-0000-0000-0000000000a1',
+    'UPDATE collectives SET prosperity_week = ''2030-01-01'''),
+  'the founder cannot pre-empt the weekly settlement');
+
+SET request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000a1';
+SET ROLE authenticated;
+UPDATE collectives SET name = 'Renamed', display_name = 'Renamed Collective'
+  WHERE id = :'alice_collective';
+RESET ROLE;
+SELECT assert(
+  (SELECT display_name = 'Renamed Collective' FROM collectives WHERE id = :'alice_collective'),
+  'the founder can still rename the Collective');
+
+\echo ''
 \echo 'ALL RLS ASSERTIONS PASSED'

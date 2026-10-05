@@ -49,6 +49,10 @@ export interface Database {
           created_by: string;
           rooms: Json;
           created_at: string;
+          /** Consecutive perfect weeks. Server-owned (migration 019). */
+          prosperity_streak: number;
+          /** week_start of the last week evaluated. Server-owned. */
+          prosperity_week: string | null;
         };
         Insert: {
           id?: string;
@@ -59,6 +63,8 @@ export interface Database {
           created_by: string;
           rooms?: Json;
           created_at?: string;
+          prosperity_streak?: number;
+          prosperity_week?: string | null;
         };
         Update: {
           name?: string;

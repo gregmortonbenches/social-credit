@@ -27,6 +27,8 @@ They are not independent — 014 assumes 013, and so on.
 | `017_overdue_reminder.sql` | Adds the guard column for the overdue push |
 | `018_function_execute_hardening.sql` | **Critical, do this first if you do nothing else.** `credits_transaction` is callable by any signed-in user, so anyone with the app can mint themselves unlimited credits |
 
+| `019_collective_prosperity.sql` | Adds the Collective's prosperity streak. **Also closes a hole in advance:** without its column-level revoke the founder could write the streak from the app. Run it **before** redeploying `weekly-reset`, which reads and writes the new columns |
+
 > `001` and `009` were also **repaired in place** in this branch, because neither
 > could ever have been applied to a fresh database. That only matters if you are
 > setting up a new environment; an existing database that already has 001's
@@ -36,7 +38,7 @@ They are not independent — 014 assumes 013, and so on.
 
 ```bash
 supabase functions deploy auto-assign          # changed: staggered due dates
-supabase functions deploy weekly-reset         # changed: promotes pending members
+supabase functions deploy weekly-reset         # changed: prosperity streak + week maths in the collective's timezone
 supabase functions deploy denounce-timeout
 supabase functions deploy send-notification
 supabase functions deploy delete-account

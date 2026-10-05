@@ -4,6 +4,7 @@ import { Alert, Modal, ScrollView, Share, StyleSheet, Text, TouchableOpacity, Vi
 import { CONFIG } from '../../constants/config';
 import { COLORS } from '../../constants/theme';
 import type { MemberProfile, WeeklyAssignment } from '../../lib/database.types';
+import { weekProgress } from '../../lib/prosperity';
 import { supabase } from '../../lib/supabase';
 import { fetchTaskLibrary } from '../../lib/taskLibrary';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -12,7 +13,7 @@ import { useConnectionStore } from '../../store/useConnectionStore';
 import { useDenouncementStore } from '../../store/useDenouncementStore';
 import { useTaskStore } from '../../store/useTaskStore';
 import { DenounceCard } from '../denouncements/DenounceCard';
-import { QuotaPoster } from './QuotaPoster';
+import { ProsperityPoster } from './ProsperityPoster';
 
 /** Cases still in play — resolved and withdrawn ones drop off the panel. */
 function isActiveCase(d: { status: string }): boolean {
@@ -159,13 +160,6 @@ export function CollectivePanel() {
     );
   }
 
-  // Derived, not state: it is a pure function of the assignments, and keeping it
-  // in an effect meant one extra render with a stale figure after every change.
-  const quotaCredits = allAssignments
-    .filter((a) => a.status === 'complete' && a.credits_value)
-    .reduce((sum, a) => sum + (a.credits_value ?? 0), 0);
-  const quotaPercent = Math.min(100, Math.round((quotaCredits / CONFIG.WEEKLY_CREDIT_POOL) * 100));
-
   const overdueAssignments: WeeklyAssignment[] = allAssignments.filter(
     (a) => a.status === 'pending' && new Date(a.due_date) < new Date() && a.user_id !== profile?.id
   );
@@ -206,11 +200,9 @@ export function CollectivePanel() {
       </Text>
       <View style={styles.titleRule} />
 
-      <QuotaPoster
-        percent={quotaPercent}
-        earned={quotaCredits}
-        pool={CONFIG.WEEKLY_CREDIT_POOL}
-        hasDuties={allAssignments.length > 0}
+      <ProsperityPoster
+        streak={collective?.prosperity_streak ?? 0}
+        week={weekProgress(allAssignments)}
       />
 
       <Text style={styles.sectionTitle}>COMRADE STATUS</Text>
@@ -231,8 +223,7 @@ export function CollectivePanel() {
         <View style={styles.aloneCard}>
           <Text style={styles.aloneHeading}>YOU STAND ALONE, COMRADE</Text>
           <Text style={styles.aloneBody}>
-            A Collective of one has no one to share the work or to denounce. Invite
-            your household with code {collective?.code}.
+            Invite your household with code {collective?.code}.
           </Text>
           <TouchableOpacity style={styles.aloneBtn} onPress={handleInvite} accessibilityRole="button">
             <Text style={styles.aloneBtnText}>INVITE COMRADES</Text>
@@ -274,28 +265,32 @@ export function CollectivePanel() {
         </>
       )}
 
-      <View style={styles.buttonStack}>
-        <TouchableOpacity
-          style={[styles.actionBtn, !canDenounce && styles.actionBtnDisabled]}
-          onPress={() => setShowDenounceModal(true)}
-          disabled={!canDenounce}
-        >
-          <Text style={styles.actionBtnText}>DENOUNCE A COMRADE!</Text>
-        </TouchableOpacity>
-        {!canDenounce && (
-          <Text style={styles.denounceHint}>
-            {eligibleAccused.length === 0
-              ? 'No other Comrades to denounce yet. Invite your household.'
-              : 'No Comrade has an overdue task. The Collective is in good order.'}
-          </Text>
-        )}
-      </View>
+      {/* With nobody else in the Collective there is nothing to denounce, and a
+          greyed-out button plus an invite hint only repeated the notice above. */}
+      {eligibleAccused.length > 0 ? (
+        <View style={styles.buttonStack}>
+          <TouchableOpacity
+            style={[styles.actionBtn, !canDenounce && styles.actionBtnDisabled]}
+            onPress={() => setShowDenounceModal(true)}
+            disabled={!canDenounce}
+          >
+            <Text style={styles.actionBtnText}>DENOUNCE A COMRADE!</Text>
+          </TouchableOpacity>
+          {!canDenounce && (
+            <Text style={styles.denounceHint}>
+              No Comrade has an overdue task. The Collective is in good order.
+            </Text>
+          )}
+        </View>
+      ) : null}
 
       <Text style={styles.sectionTitle}>MANAGE THE COLLECTIVE</Text>
       <View style={styles.manageGrid}>
-        <TouchableOpacity style={styles.manageBtn} onPress={handleInvite}>
-          <Text style={styles.manageBtnText}>INVITE COMRADES</Text>
-        </TouchableOpacity>
+        {profiles.length > 1 ? (
+          <TouchableOpacity style={styles.manageBtn} onPress={handleInvite}>
+            <Text style={styles.manageBtnText}>INVITE COMRADES</Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
           style={styles.manageBtn}
           onPress={() => router.push('/(app)/collective/preferences')}

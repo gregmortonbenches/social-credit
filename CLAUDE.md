@@ -165,7 +165,7 @@ Admins can override any value at runtime via the `app_config` Supabase table wit
 `id` · `username` · `email` · `total_credits` (int, default 500) · `device_push_token` · `anonymous_token` (set on deletion) · `age_verified_at` (16+ check passed; the DOB itself is not stored) · `deleted_at` (30-day grace period) · `created_at`
 
 **`collectives`**
-`id` · `name` · `display_name` (name + " Collective") · `code` (char 5, unique) · `timezone` (IANA string) · `created_by` · `rooms` (jsonb) · `created_at`
+`id` · `name` · `display_name` (name + " Collective") · `code` (char 5, unique) · `timezone` (IANA string) · `created_by` · `rooms` (jsonb) · `created_at` · `prosperity_streak` (int, server-owned) · `prosperity_week` (date, last week evaluated, server-owned)
 
 **`collective_members`**
 `id` · `collective_id` · `user_id` · `status` (active | paused | pending | left) · `joined_at` · `pause_started_at` · `pause_ended_at`
@@ -216,10 +216,14 @@ RLS: users read/write only rows belonging to their collective. `credit_ledger` i
 - Credits cumulative all-time
 - Denouncement credits excluded from collective prosperity quota
 
-### Collective Prosperity Quota
-- Sum of task completion credits earned this week ÷ `WEEKLY_CREDIT_POOL`
-- Display only — not stored separately
-- Visualised as growing/declining wheat field on the Right Panel
+### Collective Prosperity (decision 47)
+- **Many weeks, not this week.** The Collective page shows `collectives.prosperity_streak`: consecutive weeks in which **every** duty was completed. It is unrelated to anyone's weekly credits, which stay on the Scoreboard.
+- A week is perfect only if every non-`reassigned` assignment is `complete` **and** no denouncement against it is `auto_guilty` or `outcome = upheld`. One miss resets the streak to **zero** (no best-ever record is kept).
+- A week with no duties at all is neutral: the streak is left alone.
+- Settled by `weekly-reset` at Monday 00:00 local, after late tasks are marked `failed`; `prosperity_week` makes the hourly cron idempotent. The rules are pure functions in `supabase/functions/_shared/prosperity.ts`, tested in `__tests__/prosperity.test.ts`.
+- The streak is **server-owned**: migration 019 revokes table-wide UPDATE on `collectives` and grants only `(name, display_name, timezone, rooms)`.
+- Named stages (`CONFIG.PROSPERITY_MILESTONES`) are display only.
+- A denouncement still open at the Monday reset is not counted; one resolved later does not retroactively break the week.
 
 ### Task Due Dates
 - `auto-assign` **staggers** each member's tasks across their week
@@ -275,7 +279,7 @@ with a line saying which — opening the modal in that state was a dead end.
 
 | Function | Schedule | Status | Purpose |
 |---|---|---|---|
-| `weekly-reset` | Cron hourly | Deployed | Checks each collective's Monday 00:00 local time — settle credits, snapshot week, create pending draft_state row |
+| `weekly-reset` | Cron hourly | Deployed | Checks each collective's Monday 00:00 local time — settle credits, update the prosperity streak, create pending draft_state row. Week boundaries are computed in the collective's timezone (it used the UTC date, wrong at or west of UTC) |
 | `auto-assign` | Cron every 5 min | Deployed | Preference-based auto-assignment on Sunday ≥14:00 collective timezone |
 | `denounce-timeout` | Cron hourly | Deployed | Apply auto-guilt to unanswered denouncements |
 | `send-notification` | HTTP (called by other functions) | Deployed | Send FCM push via firebase-admin — requires `Authorization: Bearer <SERVICE_ROLE_KEY>` header |
@@ -329,7 +333,7 @@ Danger:      #E74C3C
 
 **Aesthetic:** Light cream background (#F0EAD6) — propaganda poster / print style, not a dark UI. Headers UPPERCASE, bold, letter-spacing 2px. Cards as official notices/wall posters. Denouncement cards: red border, stamp aesthetic. Achievement badges: seal/stamp, silhouette until unlocked. Loading screen: animated progress bar with "MENTAL LOADing..." label above it (`components/ui/LoadingScreen.tsx`); collectivisation progress bar style. Numbers/credits: monospaced.
 
-**Propaganda poster image:** `assets/images/propaganda-poster.jpg` — displayed at the top of the Tasks and Scoreboard panels (220px tall, `resizeMode="cover"`, edge-to-edge). A `LinearGradient` overlay (`expo-linear-gradient`) fades the bottom 80px from transparent to `COLORS.background`. The panel header text sits below the image.
+**Propaganda poster image:** `assets/images/propaganda-poster.jpg` — displayed at the top of the Tasks and Scoreboard panels (160px tall, `resizeMode="cover"`, edge-to-edge). A `LinearGradient` overlay (`expo-linear-gradient`) fades the bottom 80px from transparent to `COLORS.background`. The panel header text sits below the image.
 
 **Buttons:** Sharp corners throughout (`borderRadius: 0`). No rounded edges on any interactive button.
 
@@ -441,7 +445,7 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | 15 | Colour theme | Light cream (#F0EAD6) background, red (#C20000) primary, black (#000000) accent. Dark theme abandoned. The red was #CC0000 until the accessibility pass: it missed WCAG AA on `surface` (4.41), which affects red-on-surface headers. #C20000 is 5% darker, visually indistinguishable, and clears AA on both grounds — every palette pair now passes. See "Changing colours" guide in Design System section. |
 | 16 | Button style | `borderRadius: 0` on all buttons throughout the app — sharp corners only. |
 | 17 | Home navigation | Top tab bar removed. Dot indicators at bottom are the sole panel navigation. |
-| 18 | Prosperity visualiser | `components/collective/QuotaPoster.tsx` replaced `WheatField` (deleted). A framed notice, not an illustration: big credits earned over "OF 1,000 CREDITS REQUIRED", a 20-segment bar (5% each, the current segment part-filled), and a status line whose tone follows the quota. **No percentage is shown** — it read as a modern dashboard metric and did not suit the setting; the quota is credits against the plan's target. The wheat SVG (Noun Project crop, tiled, clipped to reveal left-to-right) was dropped because procedural illustration never read well, and opacity before it was near-unreadable. With no duties yet this week the number is dimmed and the line says the quota begins at the next assignment, so 0 is not read as failure. |
+| 18 | Prosperity visualiser | `components/collective/ProsperityPoster.tsx` shows the streak of perfect weeks as a big number, the stage reached, a 10-segment bar towards the next stage, and this week's standing ("3 OF 5 DUTIES FULFILLED", or a warning when one is overdue). Superseded the wheat illustration (never read well) and the weekly quota poster. **No percentage anywhere** — it read as a modern dashboard metric. See decision 47. |
 | 19 | Task assignment | Interactive snake draft replaced by preference-based auto-assignment. Users rank tasks via `app/(app)/collective/preferences.tsx`. Runs Sunday 14:00 collective timezone via `auto-assign` Edge Function. Performance-ordered (highest credits last week picks first); ties broken by random shuffle before sort. `draft-timeout` Edge Function deleted; `draft_state` simplified to pending/complete only. |
 | 20 | Preference prompt | First-visit modal shown on home screen when a user has no preferences saved for their collective. Dismissed state stored in AsyncStorage under key `prefs_prompted_{collectiveId}_{userId}`. |
 | 21 | Collective membership lookup | `loadUserCollective` in `app/(app)/index.tsx` uses `.limit(1).order('joined_at', descending)` not `.maybeSingle()` — multiple `collective_members` rows for the same user (created across test sessions) would cause `.maybeSingle()` to return a silent error and never load the collective. |
@@ -468,6 +472,8 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | 43 | Preference payoff | Own task cards show "YOUR 2ND CHOICE" or "NOT ONE OF YOUR PICKS" (the latter only once the member has ranked something, else it is noise), and the preferences screen explains that highest earners pick first. Ranking was the most effortful interaction in the app with no visible consequence. |
 | 44 | Connection state | `useConnectionStore` holds device connectivity (NetInfo) and the health of every realtime channel. All four `.subscribe()` calls now report their status — previously none did, so a dropped channel stayed dropped in silence and the screen quietly went stale. `ConnectionBanner` on the home screen distinguishes "offline" from "online but not live", because to a user both look identical: the data just stops changing. Coming back online re-fetches, since resubscribing does not replay what was missed. |
 | 45 | Testing | `npm test` runs Jest over the pure logic (timezone helpers), under four device timezones in CI, because the point of those helpers is that the answer does not depend on the device. `npm run test:db` applies every migration to an empty Postgres and asserts the RLS policies and RPCs behave — 18 assertions, each reproducing a specific hole that was found and closed. Every security finding in this project was a policy that read correctly and was not, so the database tests are the ones that matter: the critical PUBLIC-execute hole was found by this suite on its first run. CI runs all three jobs on every push. |
+| 46 | One heavy rule per screen | The title rule (3px red) is the only thick red bar on a panel. Cards below it use a 3px red **left** edge, not a 4px top border — two heavy bars a few pixels apart read as clutter. The propaganda poster is 160px, not 220, so content starts higher. Empty/idle states say less: the prosperity poster shows no progress bar until there is a streak to measure, and with nobody else in the Collective the Denounce button and its hint are hidden because the "you stand alone" notice already says what to do. |
+| 47 | Collective prosperity is a streak | The Collective page is about the household's long-run prosperity, disconnected from the weekly credit quota (which stays on the Scoreboard). Points only accrue if **all** duties are completed in a week, and a failed week sends it back to zero. An upheld denouncement also fails an otherwise perfect week; an empty week is neutral. Chosen over accumulating points because a streak is easy to read and the reset stings. Stored on `collectives` (migration 019), settled in `weekly-reset`, never client-writable. Founder-only collective rename was added to Settings at the same time (`renameCollective`; the founder-only UPDATE policy dates from migration 002, the same rule as Edit Rooms). |
 | 27 | Onboarding flow | `app/(onboarding)/slide-1.tsx` contains all 3 slides as a FlatList. Navigation to the app is triggered by swiping past the last slide — a 4th invisible "ghost" slide (`ghost: true`) is appended to `SLIDES`; `onViewableItemsChanged` calls `markOnboarded()` when the ghost slide becomes visible. Dots only show for non-ghost slides (`VISIBLE_SLIDES`). No auto-advance, no button. |
 
 ---
@@ -495,6 +501,7 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | `016_denouncement_hardening.sql` | Column-limits what the accused may write (they could previously set `outcome`/`status` and acquit themselves), adds the `withdrawn` status and `withdraw_denouncement` (decision 42) |
 | `017_overdue_reminder.sql` | Adds `weekly_assignments.notified_overdue_at` so the hourly overdue push fires once per assignment, and clears it on reschedule |
 | `018_function_execute_hardening.sql` | **Critical.** Revokes `EXECUTE` on `credits_transaction` from `PUBLIC` — `001`'s revoke named only `anon`/`authenticated`, which never held the grant, so any signed-in user could mint credits. Also restricts `get_user_collective_ids` and `handle_new_user` (SECURITY-FINDINGS §6) |
+| `019_collective_prosperity.sql` | Adds `collectives.prosperity_streak` and `prosperity_week`; revokes table-wide UPDATE on `collectives` and grants only `(name, display_name, timezone, rooms)` so the streak is server-owned (decision 47) |
 
 **Two earlier migrations were repaired in place** (SECURITY-FINDINGS §4) because
 neither had ever been applicable: `001` created a `collectives` policy before the
