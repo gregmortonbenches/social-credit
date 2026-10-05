@@ -12,7 +12,7 @@ import { useConnectionStore } from '../../store/useConnectionStore';
 import { useDenouncementStore } from '../../store/useDenouncementStore';
 import { useTaskStore } from '../../store/useTaskStore';
 import { DenounceCard } from '../denouncements/DenounceCard';
-import { WheatField } from './WheatField';
+import { QuotaPoster } from './QuotaPoster';
 
 /** Cases still in play — resolved and withdrawn ones drop off the panel. */
 function isActiveCase(d: { status: string }): boolean {
@@ -29,7 +29,6 @@ export function CollectivePanel() {
 
   const [profiles, setProfiles] = useState<MemberProfile[]>([]);
   const [taskNames, setTaskNames] = useState<Record<string, string>>({});
-  const [quotaPercent, setQuotaPercent] = useState(0);
   const [voteCount, setVoteCount] = useState<Record<string, { uphold: number; dismiss: number }>>({});
   const [showDenounceModal, setShowDenounceModal] = useState(false);
   const [denounceAccusedId, setDenounceAccusedId] = useState('');
@@ -51,13 +50,6 @@ export function CollectivePanel() {
   useEffect(() => {
     loadProfiles();
   }, [collective?.id, memberIdsKey]);
-
-  useEffect(() => {
-    const credits = allAssignments
-      .filter((a) => a.status === 'complete' && a.credits_value)
-      .reduce((sum, a) => sum + (a.credits_value ?? 0), 0);
-    setQuotaPercent(Math.min(100, Math.round((credits / CONFIG.WEEKLY_CREDIT_POOL) * 100)));
-  }, [allAssignments]);
 
   // Re-load vote counts when denouncements change
   useEffect(() => {
@@ -167,6 +159,13 @@ export function CollectivePanel() {
     );
   }
 
+  // Derived, not state: it is a pure function of the assignments, and keeping it
+  // in an effect meant one extra render with a stale figure after every change.
+  const quotaCredits = allAssignments
+    .filter((a) => a.status === 'complete' && a.credits_value)
+    .reduce((sum, a) => sum + (a.credits_value ?? 0), 0);
+  const quotaPercent = Math.min(100, Math.round((quotaCredits / CONFIG.WEEKLY_CREDIT_POOL) * 100));
+
   const overdueAssignments: WeeklyAssignment[] = allAssignments.filter(
     (a) => a.status === 'pending' && new Date(a.due_date) < new Date() && a.user_id !== profile?.id
   );
@@ -207,17 +206,39 @@ export function CollectivePanel() {
       </Text>
       <View style={styles.titleRule} />
 
-      <WheatField quotaPercent={quotaPercent} />
-      <Text style={styles.quotaLabel}>PROSPERITY: {quotaPercent}%</Text>
+      <QuotaPoster
+        percent={quotaPercent}
+        earned={quotaCredits}
+        pool={CONFIG.WEEKLY_CREDIT_POOL}
+        hasDuties={allAssignments.length > 0}
+      />
 
       <Text style={styles.sectionTitle}>COMRADE STATUS</Text>
       {[...profiles].sort((a, b) => b.total_credits - a.total_credits).map((p, i) => (
-        <View key={p.id} style={styles.rankRow}>
+        <View key={p.id} style={[styles.rankRow, p.id === profile?.id && styles.rankRowMe]}>
           <Text style={styles.rankNum}>#{i + 1}</Text>
-          <Text style={styles.rankName}>Comrade {p.username}</Text>
+          <Text style={styles.rankName}>
+            Comrade {p.username}
+            {p.id === profile?.id ? '  (YOU)' : ''}
+          </Text>
           <Text style={styles.rankCredits}>{p.total_credits}</Text>
         </View>
       ))}
+
+      {/* Alone in the Collective, the list is one row and the quota can never move
+          past one person's share. Say what to do rather than leave it looking broken. */}
+      {profiles.length === 1 ? (
+        <View style={styles.aloneCard}>
+          <Text style={styles.aloneHeading}>YOU STAND ALONE, COMRADE</Text>
+          <Text style={styles.aloneBody}>
+            A Collective of one has no one to share the work or to denounce. Invite
+            your household with code {collective?.code}.
+          </Text>
+          <TouchableOpacity style={styles.aloneBtn} onPress={handleInvite} accessibilityRole="button">
+            <Text style={styles.aloneBtnText}>INVITE COMRADES</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {denouncements.filter(isActiveCase).length > 0 && (
         <>
@@ -268,30 +289,27 @@ export function CollectivePanel() {
               : 'No Comrade has an overdue task. The Collective is in good order.'}
           </Text>
         )}
+      </View>
 
-        <TouchableOpacity
-          style={[styles.actionBtn, styles.actionBtnSecondary]}
-          onPress={handleInvite}
-        >
-          <Text style={[styles.actionBtnText, styles.actionBtnTextSecondary]}>INVITE COMRADES</Text>
+      <Text style={styles.sectionTitle}>MANAGE THE COLLECTIVE</Text>
+      <View style={styles.manageGrid}>
+        <TouchableOpacity style={styles.manageBtn} onPress={handleInvite}>
+          <Text style={styles.manageBtnText}>INVITE COMRADES</Text>
         </TouchableOpacity>
-
         <TouchableOpacity
-          style={[styles.actionBtn, styles.actionBtnSecondary]}
+          style={styles.manageBtn}
           onPress={() => router.push('/(app)/collective/preferences')}
         >
-          <Text style={[styles.actionBtnText, styles.actionBtnTextSecondary]}>MY TASK PREFERENCES</Text>
+          <Text style={styles.manageBtnText}>TASK PREFERENCES</Text>
         </TouchableOpacity>
-
         <TouchableOpacity
-          style={[styles.actionBtn, styles.actionBtnSecondary]}
+          style={styles.manageBtn}
           onPress={() => router.push('/(app)/collective/edit-rooms')}
         >
-          <Text style={[styles.actionBtnText, styles.actionBtnTextSecondary]}>EDIT ROOMS</Text>
+          <Text style={styles.manageBtnText}>EDIT ROOMS</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => router.push('/(app)/settings')}>
-          <Text style={[styles.actionBtnText, styles.actionBtnTextSecondary]}>COLLECTIVE SETTINGS</Text>
+        <TouchableOpacity style={styles.manageBtn} onPress={() => router.push('/(app)/settings')}>
+          <Text style={styles.manageBtnText}>SETTINGS</Text>
         </TouchableOpacity>
       </View>
 
@@ -382,13 +400,36 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 32 },
   bannerText: { color: COLORS.primary, fontWeight: '900', letterSpacing: 3, fontSize: 26, marginBottom: 10, textAlign: 'center' },
   titleRule: { height: 3, backgroundColor: COLORS.primary, marginBottom: 16 },
-  quotaLabel: { color: COLORS.accent, fontSize: 11, fontWeight: '700', letterSpacing: 2, textAlign: 'center', marginBottom: 16 },
   sectionTitle: { color: COLORS.accent, fontSize: 11, fontWeight: '700', letterSpacing: 2, marginBottom: 8, marginTop: 16 },
-  rankRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.surface },
+  rankRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: COLORS.surface },
+  rankRowMe: { backgroundColor: COLORS.surface, borderLeftWidth: 3, borderLeftColor: COLORS.primary },
   rankNum: { color: COLORS.muted, fontSize: 12, width: 28 },
   rankName: { flex: 1, color: COLORS.text, fontSize: 14 },
   rankCredits: { color: COLORS.accent, fontFamily: 'SpaceMono', fontSize: 14 },
   buttonStack: { gap: 10, marginTop: 24 },
+  manageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  manageBtn: {
+    flexBasis: '48%',
+    flexGrow: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    borderRadius: 0,
+  },
+  manageBtnText: { color: COLORS.primary, fontWeight: '700', letterSpacing: 1, fontSize: 11, textAlign: 'center' },
+  aloneCard: {
+    marginTop: 12,
+    padding: 14,
+    backgroundColor: COLORS.surface,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+  },
+  aloneHeading: { color: COLORS.primary, fontWeight: '900', letterSpacing: 2, fontSize: 12, marginBottom: 6 },
+  aloneBody: { color: COLORS.text, fontSize: 13, lineHeight: 19, marginBottom: 12 },
+  aloneBtn: { backgroundColor: COLORS.primary, paddingVertical: 12, alignItems: 'center', borderRadius: 0 },
+  aloneBtnText: { color: '#FFFFFF', fontWeight: '700', letterSpacing: 2, fontSize: 12 },
   actionBtn: { backgroundColor: COLORS.primary, padding: 14, borderRadius: 0, alignItems: 'center' },
   actionBtnSecondary: { backgroundColor: 'transparent', borderWidth: 2, borderColor: COLORS.primary },
   actionBtnDisabled: { opacity: 0.4 },

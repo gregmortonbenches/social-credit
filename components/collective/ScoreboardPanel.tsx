@@ -87,12 +87,23 @@ export function ScoreboardPanel() {
         <View style={styles.quotaCard}>
           <Text style={styles.quotaLabel}>COLLECTIVE CREDITS</Text>
           <View style={styles.quotaMainRow}>
-            <View style={styles.quotaCreditsBlock}>
-              <Text style={styles.quotaCreditsNum}>{totalWeekly}</Text>
+            <Text style={styles.quotaCreditsNum} adjustsFontSizeToFit numberOfLines={1}>
+              {totalWeekly.toLocaleString()}
+            </Text>
+            {/* Credits against the plan's target, not a percentage: a quota is
+                counted in output, and a bare % reads as a dashboard metric. */}
+            <View style={styles.quotaTarget}>
+              <Text style={styles.quotaTargetOf}>OF</Text>
+              <Text style={styles.quotaTargetNum}>{CONFIG.WEEKLY_CREDIT_POOL.toLocaleString()}</Text>
+              <Text style={styles.quotaTargetOf}>REQUIRED</Text>
             </View>
-            <Text style={styles.quotaBigPercent}>{quotaPercent}%</Text>
           </View>
-          <View style={styles.quotaBar}>
+          <View
+            style={styles.quotaBar}
+            accessibilityRole="progressbar"
+            accessibilityLabel="Weekly production quota"
+            accessibilityValue={{ min: 0, max: 100, now: quotaPercent }}
+          >
             <Svg style={StyleSheet.absoluteFill}>
               <Defs>
                 <Pattern id="hatch" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
@@ -176,20 +187,17 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginBottom: 12,
   },
-  quotaCreditsBlock: { justifyContent: 'flex-end' },
   quotaCreditsNum: {
-    color: COLORS.text,
-    fontSize: 32,
-    fontFamily: 'SpaceMono',
-    fontWeight: '700',
-    lineHeight: 36,
-  },
-  quotaBigPercent: {
+    flex: 1,
     color: COLORS.primary,
     fontSize: 56,
-    fontWeight: '900',
-    lineHeight: 56,
+    fontFamily: 'SpaceMono',
+    fontWeight: '700',
+    lineHeight: 60,
   },
+  quotaTarget: { alignItems: 'flex-end', paddingBottom: 4, marginLeft: 12 },
+  quotaTargetOf: { color: COLORS.muted, fontSize: 10, letterSpacing: 2, fontWeight: '700' },
+  quotaTargetNum: { color: COLORS.text, fontSize: 20, fontFamily: 'SpaceMono', fontWeight: '700', lineHeight: 26 },
   quotaBar: {
     height: 16,
     backgroundColor: '#3D1515',
