@@ -6,7 +6,7 @@ import { getTaskIcon } from '../../constants/tasks';
 import { COLORS } from '../../constants/theme';
 import { formatNextAssignment, isSameCollectiveDay } from '../../lib/draft';
 import type { TaskLibrary } from '../../lib/database.types';
-import { supabase } from '../../lib/supabase';
+import { fetchTaskLibrary } from '../../lib/taskLibrary';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCollectiveStore } from '../../store/useCollectiveStore';
 import { useTaskStore } from '../../store/useTaskStore';
@@ -34,23 +34,21 @@ export function TasksPanel() {
       await Promise.all([
         fetchAssignments(collective.id, profile.id, collective.timezone),
         fetchCollective(collective.id),
-        loadTaskLibrary(),
+        loadTaskLibrary(true),
       ]);
     } finally {
       setRefreshing(false);
     }
   }, [collective?.id, profile?.id]);
 
-  async function loadTaskLibrary() {
-    const { data, error: libError } = await supabase.from('task_library').select('*');
-    // Swallowing this left every task card showing the placeholder em-dash with
-    // no indication anything had gone wrong.
-    if (libError) {
-      if (__DEV__) console.warn('[tasks] task library load failed:', libError.message);
-      return;
-    }
-    if (data) {
+  async function loadTaskLibrary(force = false) {
+    try {
+      const data = await fetchTaskLibrary(force);
       setTaskLibrary(Object.fromEntries(data.map((t) => [t.id, t])));
+    } catch (err) {
+      // Swallowing this left every task card showing the placeholder em-dash with
+      // no indication anything had gone wrong.
+      if (__DEV__) console.warn('[tasks] task library load failed:', (err as Error).message);
     }
   }
 

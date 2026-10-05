@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ACHIEVEMENTS_BY_KEY } from '../../constants/achievements';
 import { COLORS } from '../../constants/theme';

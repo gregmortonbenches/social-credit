@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { CONFIG } from '../../constants/config';
-import React, { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Linking,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -29,6 +30,9 @@ function formatDob(input: string): string {
 
 export default function SignUpScreen() {
   const signUp = useAuthStore((s) => s.signUp);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const dobRef = useRef<TextInput>(null);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -127,6 +131,12 @@ export default function SignUpScreen() {
           value={username}
           onChangeText={setUsername}
           autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="username-new"
+          textContentType="username"
+          returnKeyType="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => emailRef.current?.focus()}
           error={errors.username}
         />
         <PropagandaInput
@@ -135,6 +145,13 @@ export default function SignUpScreen() {
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          textContentType="emailAddress"
+          returnKeyType="next"
+          submitBehavior="submit"
+          ref={emailRef}
+          onSubmitEditing={() => passwordRef.current?.focus()}
           error={errors.email}
         />
         <PropagandaInput
@@ -143,6 +160,12 @@ export default function SignUpScreen() {
           onChangeText={setPassword}
           secureTextEntry
           showToggle
+          autoComplete="new-password"
+          textContentType="newPassword"
+          returnKeyType="next"
+          submitBehavior="submit"
+          ref={passwordRef}
+          onSubmitEditing={() => dobRef.current?.focus()}
           error={errors.password}
         />
         <PropagandaInput
@@ -151,6 +174,7 @@ export default function SignUpScreen() {
           onChangeText={(t) => setDob(formatDob(t))}
           placeholder="01-01-1990"
           keyboardType="number-pad"
+          ref={dobRef}
           error={errors.dob}
         />
 

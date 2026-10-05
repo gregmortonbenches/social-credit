@@ -1,4 +1,3 @@
-import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { selectRealtimeHealthy, useConnectionStore } from '../../store/useConnectionStore';

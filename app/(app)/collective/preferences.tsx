@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   PanResponder,
   ScrollView,
   StyleSheet,
@@ -12,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../../constants/theme';
+import { haptics } from '../../../lib/haptics';
 import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useCollectiveStore } from '../../../store/useCollectiveStore';
@@ -21,7 +23,13 @@ interface Task {
   name: string;
 }
 
-const ITEM_HEIGHT = 50;
+// Fixed, so the drag maths and the layout agree. Row height plus its bottom
+// margin is how far one slot is from the next.
+const ROW_HEIGHT = 56;
+const ROW_GAP = 6;
+const STEP = ROW_HEIGHT + ROW_GAP;
+
+const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
 // ─── Row components (memoised so only changed rows re-render during drag) ───
 
@@ -30,6 +38,7 @@ const RankedRow = React.memo(function RankedRow({
   index,
   isDragging,
   isDimmed,
+  translateY,
   panHandlers,
   onRemove,
 }: {
@@ -37,29 +46,34 @@ const RankedRow = React.memo(function RankedRow({
   index: number;
   isDragging: boolean;
   isDimmed: boolean;
+  translateY: Animated.Value;
   panHandlers: object;
   onRemove: (id: string) => void;
 }) {
   return (
-    <View
+    <Animated.View
       style={[
         styles.rankedRow,
         isDragging && styles.rankedRowActive,
         isDimmed && styles.rankedRowDimmed,
+        { transform: [{ translateY }, { scale: isDragging ? 1.03 : 1 }] },
       ]}
-      {...panHandlers}
     >
-      <Text style={styles.rankBadge}>{index + 1}</Text>
-      <View style={styles.dragHandle} pointerEvents="none">
-        <View style={styles.dragLine} />
-        <View style={styles.dragLine} />
-        <View style={styles.dragLine} />
+      {/* The handle is the only grab area, and it is wide: the old drag started
+          from anywhere on the row, after a 5px threshold, and fought the scroll. */}
+      <View style={styles.grabArea} {...panHandlers}>
+        <Text style={styles.rankBadge}>{index + 1}</Text>
+        <View style={styles.dragHandle} pointerEvents="none">
+          <View style={styles.dragLine} />
+          <View style={styles.dragLine} />
+          <View style={styles.dragLine} />
+        </View>
       </View>
       <Text style={styles.taskName}>{task.name}</Text>
       <TouchableOpacity onPress={() => onRemove(task.id)} style={styles.removeBtn}>
         <Text style={styles.removeText}>✕</Text>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 });
 
@@ -92,14 +106,18 @@ export default function PreferencesScreen() {
   const [saving, setSaving] = useState(false);
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [displayedRankedIds, setDisplayedRankedIds] = useState<string[]>([]);
 
   // Refs so PanResponder closures always see latest values without being recreated.
-  const displayedRef = useRef<string[]>([]);
   const rankedRef = useRef<string[]>([]);
-  const dragRef = useRef<{ taskId: string; originalIndex: number; currentIndex: number } | null>(null);
+  const dragRef = useRef<{ taskId: string; originalIndex: number; target: number } | null>(null);
 
-  useEffect(() => { displayedRef.current = displayedRankedIds; }, [displayedRankedIds]);
+  // The dragged row follows the finger through `dragY`; every other row slides
+  // by `shifts[id]` to open a gap at the slot the dragged row is hovering over.
+  // These are Animated values rather than state, so a drag does not re-render.
+  const dragY = useRef(new Animated.Value(0)).current;
+  const shifts = useRef<Record<string, Animated.Value>>({}).current;
+  const getShift = (id: string) => (shifts[id] ??= new Animated.Value(0));
+
   useEffect(() => { rankedRef.current = rankedIds; }, [rankedIds]);
 
   useEffect(() => {
@@ -147,7 +165,6 @@ export default function PreferencesScreen() {
     }
 
     setRankedIds(ids);
-    setDisplayedRankedIds(ids);
     setUnranked(rest);
   }, [taskPreferences, tasks]);
 
@@ -158,59 +175,80 @@ export default function PreferencesScreen() {
   // changes. They read current positions from refs so they don't need to
   // close over rankedIds (which changes after every drag release).
   const panResponders = useMemo(() => {
+    const finish = () => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      dragRef.current = null;
+      // Settle into the slot, then commit the new order and clear every offset
+      // in the same tick so the rows do not flicker.
+      Animated.timing(dragY, {
+        toValue: (drag.target - drag.originalIndex) * STEP,
+        duration: 100,
+        useNativeDriver: true,
+      }).start(() => {
+        const next = [...rankedRef.current];
+        next.splice(drag.originalIndex, 1);
+        next.splice(drag.target, 0, drag.taskId);
+        rankedRef.current = next;
+        setRankedIds(next);
+        Object.values(shifts).forEach((v) => v.setValue(0));
+        dragY.setValue(0);
+        setDraggingId(null);
+      });
+    };
+
     const map: Record<string, ReturnType<typeof PanResponder.create>> = {};
     tasks.forEach(({ id: taskId }) => {
-      let grantDy = 0;
       map[taskId] = PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, gs) =>
-          Math.abs(gs.dy) > 5 && Math.abs(gs.dy) > Math.abs(gs.dx),
-        onPanResponderGrant: (_, gs) => {
-          grantDy = gs.dy;
-          const originalIndex = rankedRef.current.indexOf(taskId);
-          dragRef.current = { taskId, originalIndex, currentIndex: originalIndex };
+        // Grab immediately on touching the handle, and refuse to give the touch
+        // up to the ScrollView mid-drag.
+        onStartShouldSetPanResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: () => {
+          const index = rankedRef.current.indexOf(taskId);
+          if (index < 0) return;
+          dragRef.current = { taskId, originalIndex: index, target: index };
+          dragY.setValue(0);
           setDraggingId(taskId);
-          setDisplayedRankedIds([...rankedRef.current]);
+          haptics.grab();
         },
         onPanResponderMove: (_, gs) => {
           const drag = dragRef.current;
           if (!drag || drag.taskId !== taskId) return;
-          const target = Math.max(
-            0,
-            Math.min(
-              displayedRef.current.length - 1,
-              drag.originalIndex + Math.round((gs.dy - grantDy) / ITEM_HEIGHT)
-            )
-          );
-          if (target !== drag.currentIndex) {
-            const next = [...displayedRef.current];
-            next.splice(drag.currentIndex, 1);
-            next.splice(target, 0, taskId);
-            setDisplayedRankedIds(next);
-            drag.currentIndex = target;
-          }
+          const last = rankedRef.current.length - 1;
+          const y = clamp(gs.dy, -drag.originalIndex * STEP, (last - drag.originalIndex) * STEP);
+          dragY.setValue(y);
+
+          const target = clamp(Math.round(drag.originalIndex + y / STEP), 0, last);
+          if (target === drag.target) return;
+          drag.target = target;
+          haptics.tick();
+          rankedRef.current.forEach((id, i) => {
+            if (id === taskId) return;
+            const to =
+              i > drag.originalIndex && i <= target ? -STEP :
+              i < drag.originalIndex && i >= target ? STEP : 0;
+            Animated.timing(getShift(id), { toValue: to, duration: 120, useNativeDriver: true }).start();
+          });
         },
-        onPanResponderRelease: () => {
-          const final = [...displayedRef.current];
-          setRankedIds(final);
-          setDraggingId(null);
-          dragRef.current = null;
-        },
+        onPanResponderRelease: finish,
+        onPanResponderTerminate: finish,
       });
     });
     return map;
   }, [tasks]); // Never recreated mid-drag or after drag release
 
   const removeFromRanked = useCallback((taskId: string) => {
+    haptics.tap();
     setRankedIds((prev) => prev.filter((id) => id !== taskId));
-    setDisplayedRankedIds((prev) => prev.filter((id) => id !== taskId));
     const task = taskMap.get(taskId);
     if (task) setUnranked((prev) => [...prev, task].sort((a, b) => a.name.localeCompare(b.name)));
   }, [taskMap]);
 
   const addToRanked = useCallback((taskId: string) => {
-    setRankedIds((prev) => [...prev, taskId]);
-    setDisplayedRankedIds((prev) => [...prev, taskId]);
+    haptics.tap();
+    // Top of the list: what you just chose to rank is what you care about now.
+    setRankedIds((prev) => [taskId, ...prev]);
     setUnranked((prev) => prev.filter((t) => t.id !== taskId));
   }, []);
 
@@ -219,6 +257,7 @@ export default function PreferencesScreen() {
     setSaving(true);
     try {
       await savePreferences(collective.id, profile.id, rankedIds);
+      haptics.success();
       router.back();
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'Could not save preferences.');
@@ -228,11 +267,10 @@ export default function PreferencesScreen() {
   }
 
   const displayedTasks = useMemo(() => {
-    const activeIds = draggingId ? displayedRankedIds : rankedIds;
-    return [...new Set(activeIds)]
+    return [...new Set(rankedIds)]
       .map((id) => taskMap.get(id))
       .filter((t): t is Task => t !== undefined);
-  }, [draggingId, displayedRankedIds, rankedIds, taskMap]);
+  }, [rankedIds, taskMap]);
 
   if (loading) {
     return (
@@ -260,7 +298,7 @@ export default function PreferencesScreen() {
         {displayedTasks.length > 0 && (
           <>
             <Text style={styles.sectionLabel}>RANKED PREFERENCES</Text>
-            <Text style={styles.hint}>Hold and drag the handle to reorder.</Text>
+            <Text style={styles.hint}>Drag the handle to reorder.</Text>
             {displayedTasks.map((task, i) => (
               <RankedRow
                 key={task.id}
@@ -268,6 +306,7 @@ export default function PreferencesScreen() {
                 index={i}
                 isDragging={draggingId === task.id}
                 isDimmed={draggingId !== null && draggingId !== task.id}
+                translateY={draggingId === task.id ? dragY : getShift(task.id)}
                 panHandlers={panResponders[task.id]?.panHandlers ?? {}}
                 onRemove={removeFromRanked}
               />
@@ -351,10 +390,19 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.primary,
-    paddingVertical: 12,
+    height: ROW_HEIGHT,
     paddingHorizontal: 12,
-    marginBottom: 6,
+    marginBottom: ROW_GAP,
     gap: 10,
+  },
+  grabArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    gap: 10,
+    paddingRight: 8,
+    marginLeft: -12,
+    paddingLeft: 12,
   },
   rankedRowActive: {
     borderColor: COLORS.primary,
@@ -365,7 +413,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 10,
     elevation: 10,
-    transform: [{ scale: 1.03 }],
     zIndex: 999,
   },
   rankedRowDimmed: {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AchievementBadge } from '../../components/achievements/AchievementBadge';
 import { ACHIEVEMENTS, type Achievement } from '../../constants/achievements';

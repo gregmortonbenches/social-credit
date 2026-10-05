@@ -1,6 +1,6 @@
 import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PropagandaButton } from '../../../components/ui/PropagandaButton';
 import { PropagandaInput } from '../../../components/ui/PropagandaInput';

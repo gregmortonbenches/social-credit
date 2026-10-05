@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Modal, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { CONFIG } from '../../constants/config';
 import { COLORS } from '../../constants/theme';
 import type { MemberProfile, WeeklyAssignment } from '../../lib/database.types';
 import { supabase } from '../../lib/supabase';
+import { fetchTaskLibrary } from '../../lib/taskLibrary';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCollectiveStore } from '../../store/useCollectiveStore';
 import { useConnectionStore } from '../../store/useConnectionStore';
@@ -110,8 +111,12 @@ export function CollectivePanel() {
   }
 
   async function loadTaskNames() {
-    const { data } = await supabase.from('task_library').select('id, name');
-    if (data) setTaskNames(Object.fromEntries(data.map((t) => [t.id, t.name])));
+    try {
+      const data = await fetchTaskLibrary();
+      setTaskNames(Object.fromEntries(data.map((t) => [t.id, t.name])));
+    } catch (err) {
+      if (__DEV__) console.warn('[collective] task library load failed:', (err as Error).message);
+    }
   }
 
   async function loadVoteCounts() {

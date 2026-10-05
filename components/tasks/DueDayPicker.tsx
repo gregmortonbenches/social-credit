@@ -1,4 +1,3 @@
-import React from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { collectiveDayKey } from '../../lib/draft';

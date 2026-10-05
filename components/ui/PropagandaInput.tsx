@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import { type Ref, useState } from 'react';
 import { StyleSheet, Text, TextInput, type TextInputProps, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants/theme';
 
@@ -7,6 +7,8 @@ interface Props extends TextInputProps {
   label: string;
   error?: string;
   showToggle?: boolean;
+  // React 19 passes `ref` as a normal prop, so forms can focus the next field.
+  ref?: Ref<TextInput>;
 }
 
 export function PropagandaInput({ label, error, style, showToggle, secureTextEntry, ...rest }: Props) {

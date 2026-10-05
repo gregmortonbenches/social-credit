@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { avatarColor, COLORS } from '../../constants/theme';
 import { collectiveWeekdayShort, isSameCollectiveDay } from '../../lib/draft';
+import { haptics } from '../../lib/haptics';
 import type { WeeklyAssignment } from '../../lib/database.types';
 import { useCollectiveStore } from '../../store/useCollectiveStore';
 import { useTaskStore } from '../../store/useTaskStore';
@@ -94,6 +95,7 @@ export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
     setBusy(true);
     try {
       await completeTask(assignment.id);
+      haptics.success();
 
       // Stamp slam
       stampScale.setValue(0);
@@ -145,6 +147,7 @@ export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
             setBusy(true);
             try {
               await uncompleteTask(assignment.id);
+              haptics.tap();
               stampScale.setValue(0);
             } catch {
               Alert.alert('Error', 'Could not undo completion. Please try again, Comrade.');

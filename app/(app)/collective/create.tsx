@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,

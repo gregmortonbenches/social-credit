@@ -1,5 +1,5 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { isAppleSignInAvailable, signInWithApple, signInWithGoogle } from '../../lib/oauth';

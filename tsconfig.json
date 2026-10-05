@@ -8,6 +8,7 @@
     "noImplicitThis": true,
     "alwaysStrict": true,
     "noUnusedLocals": true,
+    "types": ["jest", "node"],
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "paths": {

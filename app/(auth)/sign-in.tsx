@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
 } from 'react-native';
 import { SocialSignIn } from '../../components/auth/SocialSignIn';
@@ -21,6 +22,7 @@ export default function SignInScreen() {
   const signIn = useAuthStore((s) => s.signIn);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const passwordRef = useRef<TextInput>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -60,6 +62,12 @@ export default function SignInScreen() {
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          textContentType="emailAddress"
+          returnKeyType="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => passwordRef.current?.focus()}
         />
         <PropagandaInput
           label="Password"
@@ -67,6 +75,11 @@ export default function SignInScreen() {
           onChangeText={setPassword}
           secureTextEntry
           showToggle
+          ref={passwordRef}
+          autoComplete="current-password"
+          textContentType="password"
+          returnKeyType="go"
+          onSubmitEditing={handleSignIn}
         />
 
         <PropagandaButton title="Report for Duty" onPress={handleSignIn} loading={loading} style={styles.btn} />

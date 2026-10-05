@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { getRandomProverb } from '../../constants/proverbs';
 import { COLORS } from '../../constants/theme';

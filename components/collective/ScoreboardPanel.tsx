@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Defs, Line as SvgLine, Pattern, Rect as SvgRect, Svg } from 'react-native-svg';
 import { CONFIG } from '../../constants/config';
@@ -93,7 +93,7 @@ export function ScoreboardPanel() {
             <Text style={styles.quotaBigPercent}>{quotaPercent}%</Text>
           </View>
           <View style={styles.quotaBar}>
-            <Svg style={StyleSheet.absoluteFillObject}>
+            <Svg style={StyleSheet.absoluteFill}>
               <Defs>
                 <Pattern id="hatch" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
                   <SvgLine x1="0" y1="8" x2="8" y2="0" stroke="#5A2020" strokeWidth="1.5" />

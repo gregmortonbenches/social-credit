@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Modal, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AchievementUnlockOverlay } from '../../components/achievements/AchievementUnlockOverlay';
@@ -51,7 +51,10 @@ export default function HomeScreen() {
       return;
     }
     loadUserCollective();
-  }, [profile]);
+    // Keyed on the id, not the object: refreshProfile() and updateProfile() swap
+    // in a new profile object on every credit change, which re-ran this lookup
+    // and refetched the whole collective each time.
+  }, [profile?.id]);
 
   useEffect(() => {
     if (!collective || !profile) return;
