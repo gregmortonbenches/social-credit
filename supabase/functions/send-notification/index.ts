@@ -1,5 +1,5 @@
-import { initializeApp, cert, getApps } from 'https://esm.sh/firebase-admin@12/app';
-import { getMessaging } from 'https://esm.sh/firebase-admin@12/messaging';
+import { initializeApp, cert, getApps } from 'npm:firebase-admin@12/app';
+import { getMessaging } from 'npm:firebase-admin@12/messaging';
 
 // Lazily initialise Firebase Admin (idempotent across warm starts)
 if (!getApps().length) {
