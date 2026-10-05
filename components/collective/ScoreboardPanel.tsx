@@ -155,7 +155,7 @@ export function ScoreboardPanel() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   posterContainer: { position: 'relative' },
-  poster: { width: '100%', height: 220 },
+  poster: { width: '100%', height: 160 },
   posterFade: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 },
   content: { padding: 16 },
   bannerText: {
@@ -171,8 +171,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     padding: 16,
     marginBottom: 20,
-    borderTopWidth: 4,
-    borderTopColor: COLORS.primary,
   },
   quotaLabel: {
     color: COLORS.muted,

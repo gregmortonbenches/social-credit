@@ -17,6 +17,8 @@ interface CollectiveState {
   joinCollective: (code: string, userId: string) => Promise<void>;
   leaveCollective: (collectiveId: string, userId: string) => Promise<void>;
   updateRooms: (collectiveId: string, rooms: Record<string, number>) => Promise<void>;
+  /** Founder only (the collectives UPDATE policy, migration 002). */
+  renameCollective: (collectiveId: string, name: string) => Promise<void>;
   subscribeToMembers: (collectiveId: string, userId?: string) => () => void;
   loadPreferences: (collectiveId: string, userId: string) => Promise<void>;
   savePreferences: (collectiveId: string, userId: string, rankedTaskIds: string[]) => Promise<void>;
@@ -104,6 +106,20 @@ export const useCollectiveStore = create<CollectiveState>((set, get) => ({
     });
     if (error) throw error;
     set({ collective: null, members: [] });
+  },
+
+  // display_name is "<name> Collective", exactly as create_collective() builds it
+  // (migration 013), so the two never drift apart.
+  renameCollective: async (collectiveId, name) => {
+    const trimmed = name.trim();
+    const { data, error } = await supabase
+      .from('collectives')
+      .update({ name: trimmed, display_name: `${trimmed} Collective` })
+      .eq('id', collectiveId)
+      .select()
+      .single();
+    if (error) throw error;
+    set({ collective: data });
   },
 
   updateRooms: async (collectiveId, rooms) => {

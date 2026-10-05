@@ -204,9 +204,8 @@ function NoAssignmentsNotice({ isPending, timezone }: { isPending: boolean; time
         </Text>
       ) : (
         <Text style={noticeStyles.body}>
-          Duties are assigned automatically every Sunday afternoon
-          {when ? ` — next ${when}` : ''}. Rank your preferred tasks now and the
-          Collective will take your wishes into account.
+          Duties are assigned every Sunday afternoon
+          {when ? ` — next ${when}` : ''}. Rank the tasks you prefer first.
         </Text>
       )}
 
@@ -224,11 +223,11 @@ function NoAssignmentsNotice({ isPending, timezone }: { isPending: boolean; time
 
 const noticeStyles = StyleSheet.create({
   card: {
-    borderTopWidth: 4,
-    borderTopColor: COLORS.primary,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
     backgroundColor: COLORS.surface,
-    padding: 18,
-    marginBottom: 24,
+    padding: 16,
+    marginBottom: 20,
   },
   heading: {
     color: COLORS.primary,
@@ -313,7 +312,7 @@ const sectionStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   posterContainer: { position: 'relative' },
-  poster: { width: '100%', height: 220 },
+  poster: { width: '100%', height: 160 },
   posterFade: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 },
   content: { padding: 16 },
   bannerText: { color: COLORS.primary, fontWeight: '900', letterSpacing: 3, fontSize: 26, marginBottom: 10, textAlign: 'center' },

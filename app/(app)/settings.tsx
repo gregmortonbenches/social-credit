@@ -14,7 +14,9 @@ import {
   View,
 } from 'react-native';
 import { PropagandaButton } from '../../components/ui/PropagandaButton';
+import { CONFIG } from '../../constants/config';
 import { COLORS } from '../../constants/theme';
+import { haptics } from '../../lib/haptics';
 import { collectiveWeekStart } from '../../lib/draft';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -23,13 +25,24 @@ import { useTaskStore } from '../../store/useTaskStore';
 
 export default function SettingsScreen() {
   const { profile, signOut, updateProfile } = useAuthStore();
-  const { collective, leaveCollective, members, fetchCollective } = useCollectiveStore();
+  const { collective, leaveCollective, members, fetchCollective, renameCollective } = useCollectiveStore();
   const { fetchAssignments } = useTaskStore();
   const [username, setUsername] = useState(profile?.username ?? '');
   const [savingUsername, setSavingUsername] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [showDeleteSection, setShowDeleteSection] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [collectiveName, setCollectiveName] = useState(collective?.name ?? '');
+  const [savingName, setSavingName] = useState(false);
+  const [nameSaved, setNameSaved] = useState(false);
+
+  // Only the founder can edit the collective row (policy in migration 002), so
+  // only the founder is offered the control. Anyone else would get a silent no-op.
+  const isFounder = !!collective && collective.created_by === profile?.id;
+  const nameDirty =
+    collectiveName.trim().length > 0 &&
+    collectiveName.trim().length <= CONFIG.COLLECTIVE_NAME_MAX_CHARS &&
+    collectiveName.trim() !== collective?.name;
 
   const myMembership = members.find((m) => m.user_id === profile?.id);
   const isPaused = myMembership?.status === 'paused';
@@ -41,6 +54,22 @@ export default function SettingsScreen() {
       await updateProfile({ username: username.trim() });
     } finally {
       setSavingUsername(false);
+    }
+  }
+
+  async function handleSaveCollectiveName() {
+    if (!collective || !nameDirty) return;
+    setSavingName(true);
+    try {
+      await renameCollective(collective.id, collectiveName);
+      setCollectiveName(collectiveName.trim());
+      haptics.success();
+      setNameSaved(true);
+      setTimeout(() => setNameSaved(false), 2000);
+    } catch (err: any) {
+      Alert.alert('Could not rename', err?.message ?? 'Please try again, Comrade.');
+    } finally {
+      setSavingName(false);
     }
   }
 
@@ -198,6 +227,34 @@ export default function SettingsScreen() {
 
       {collective && (
         <Section title="COLLECTIVE">
+          {isFounder ? (
+            <View style={styles.nameBlock}>
+              <Text style={styles.codeLabel}>COLLECTIVE NAME</Text>
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={styles.input}
+                  value={collectiveName}
+                  onChangeText={(t) => { setCollectiveName(t); setNameSaved(false); }}
+                  maxLength={CONFIG.COLLECTIVE_NAME_MAX_CHARS}
+                  autoCapitalize="words"
+                  returnKeyType="done"
+                  onSubmitEditing={handleSaveCollectiveName}
+                  accessibilityLabel="Collective name"
+                />
+                <PropagandaButton
+                  title={nameSaved ? 'Saved' : 'Save'}
+                  onPress={handleSaveCollectiveName}
+                  loading={savingName}
+                  disabled={!nameDirty}
+                  style={styles.saveBtn}
+                />
+              </View>
+              <Text style={styles.nameHint}>
+                Shown as "{(collectiveName.trim() || '…')} Collective".
+              </Text>
+            </View>
+          ) : null}
+
           <View style={styles.codeBox}>
             <Text style={styles.codeLabel}>COLLECTIVE CODE</Text>
             <Text style={styles.code}>{collective.code}</Text>
@@ -429,6 +486,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   saveBtn: { paddingHorizontal: 16, paddingVertical: 12 },
+  nameBlock: { marginBottom: 16 },
+  nameHint: { color: COLORS.muted, fontSize: 12, marginTop: 6 },
   codeBox: { backgroundColor: COLORS.surface, padding: 16, borderRadius: 4, alignItems: 'center', marginBottom: 12 },
   codeLabel: { color: COLORS.muted, fontSize: 10, letterSpacing: 2, marginBottom: 4 },
   code: { color: COLORS.accent, fontSize: 32, fontFamily: 'SpaceMono', fontWeight: '700', letterSpacing: 8 },
