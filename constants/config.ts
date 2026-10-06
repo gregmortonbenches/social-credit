@@ -8,6 +8,7 @@ export const CONFIG = {
   DENOUNCE_TWO_PERSON_ABUSE_PENALTY: 150,
   DENOUNCE_TWO_PERSON_WINDOW_DAYS: 60,
   DENOUNCE_RESPONSE_WINDOW_HOURS: 24,
+  DENOUNCE_VOTE_WINDOW_HOURS: 24,  // after the accused responds; jurors who have not voted by then are ignored
   DENOUNCE_EXPLANATION_MAX_WORDS: 300,
 
   AUTO_ASSIGN_HOUR: 14,  // Sunday, collective timezone — when weekly auto-assignment runs

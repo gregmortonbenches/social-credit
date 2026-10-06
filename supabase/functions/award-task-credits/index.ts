@@ -90,9 +90,12 @@ Deno.serve(async (req) => {
       return json({ ok: true, awarded: 0, reason: 'no credits_value set' });
     }
 
-    // Idempotency. The ledger is append-only and `weekly-reset` runs the same
-    // dedup check, so a retry, a double tap, or the Monday job arriving after
-    // this must not pay twice.
+    // Idempotency. This check only lets us say "already awarded" instead of
+    // "awarded"; it is not the guard. The guard is the unique index on
+    // credit_ledger (reference_id, reason, user_id) behind credits_transaction
+    // (migration 020), which makes the payout a no-op the second time even when
+    // two calls race past this SELECT together — a double tap, or a retry landing
+    // alongside the Monday settlement.
     const { data: existing, error: dedupError } = await supabaseAdmin
       .from('credit_ledger')
       .select('id')

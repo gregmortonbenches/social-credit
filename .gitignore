@@ -68,3 +68,6 @@ build/
 
 # Supabase local
 .supabase/
+
+# Supabase CLI cache (versions, project refs)
+supabase/.temp/

@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { fromZonedTime, toZonedTime } from 'https://esm.sh/date-fns-tz@3';
-import { rejectNonCronCaller } from '../_shared/cron-auth.ts';
+import { weekStartKey } from '../_shared/prosperity.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -15,50 +15,199 @@ const DEFAULT_TASK_DUE_MINUTE = 59;
 const BACKSTOP_DAY_OFFSET = 6;
 const STAGGER_TASK_DUE_DATES = true;
 
-Deno.serve(async (req) => {
-  const denied = rejectNonCronCaller(req);
-  if (denied) return denied;
-
-  try {
-    const body = await req.json().catch(() => ({}));
-    const force = body?.force === true;
-
-    const { data: pendingStates, error } = await supabase
-      .from('draft_state')
-      .select('*, collectives(timezone)')
-      .eq('status', 'pending');
-
-    if (error) throw error;
-
-    const now = new Date();
-    const toProcess = force
-      ? (pendingStates ?? [])
-      : (pendingStates ?? []).filter((ds) => {
-          const tz = ds.collectives?.timezone ?? 'UTC';
-          const local = toZonedTime(now, tz);
-          return local.getDay() === 0 && local.getHours() >= AUTO_ASSIGN_HOUR;
-        });
-
-    for (const ds of toProcess) {
-      await autoAssign(ds);
-    }
-
-    return new Response(
-      JSON.stringify({ ok: true, processed: toProcess.length }),
-      { headers: { 'Content-Type': 'application/json' } }
-    );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : JSON.stringify(err);
-    return new Response(JSON.stringify({ error: message }), { status: 500 });
-  }
-});
-
-async function autoAssign(ds: {
+type DraftState = {
   id: string;
   collective_id: string;
   week_start: string;
   collectives: { timezone: string } | null;
-}) {
+};
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message);
+  return JSON.stringify(err);
+}
+
+Deno.serve(async (req) => {
+  const body = await req.json().catch(() => ({}));
+
+  try {
+    // Two kinds of caller. The cron holds the service role key and sweeps every
+    // pending Collective. Anyone else is turned away, with one exception: an
+    // admin may force a single Collective they belong to (the dev button in
+    // Settings), because the app can never hold the service role key.
+    let toProcess: DraftState[];
+    if (req.headers.get('Authorization') === `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`) {
+      toProcess = await dueDraftStates();
+    } else {
+      const forced = await forceForAdmin(req, body);
+      if (forced instanceof Response) return forced;
+      toProcess = forced;
+    }
+
+    // One Collective failing must not strand the rest of the sweep.
+    const failures: string[] = [];
+    let processed = 0;
+    for (const ds of toProcess) {
+      try {
+        await autoAssign(ds);
+        processed++;
+      } catch (err) {
+        failures.push(`${ds.collective_id}: ${errorMessage(err)}`);
+      }
+    }
+
+    if (failures.length > 0 && processed === 0) {
+      return json({ error: failures.join('; ') }, 500);
+    }
+    return json({ ok: true, processed, failures });
+  } catch (err) {
+    return json({ error: errorMessage(err) }, 500);
+  }
+});
+
+/** Pending Collectives whose local time is Sunday, at or past the assignment hour. */
+async function dueDraftStates(): Promise<DraftState[]> {
+  const { data, error } = await supabase
+    .from('draft_state')
+    .select('id, collective_id, week_start, collectives(timezone)')
+    .eq('status', 'pending');
+  if (error) throw error;
+
+  const now = new Date();
+  return ((data ?? []) as unknown as DraftState[]).filter((ds) => {
+    const local = toZonedTime(now, ds.collectives?.timezone ?? 'UTC');
+    return local.getDay() === 0 && local.getHours() >= AUTO_ASSIGN_HOUR;
+  });
+}
+
+/**
+ * Dev force-assign for an admin. Resolves the caller from their JWT, requires
+ * `profiles.is_admin` (server-owned since migration 020: nobody can grant it to
+ * themselves) and membership of the Collective, then clears this week's
+ * still-pending assignments and re-opens the draft so the normal path can run.
+ */
+async function forceForAdmin(req: Request, body: any): Promise<DraftState[] | Response> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) return new Response('Unauthorized', { status: 401 });
+
+  const supabaseUser = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY')!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+  const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
+  if (authError || !user) return new Response('Unauthorized', { status: 401 });
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (!profile?.is_admin) return new Response('Forbidden', { status: 403 });
+
+  const collectiveId = body?.collectiveId;
+  if (body?.force !== true || typeof collectiveId !== 'string') {
+    return json({ error: 'force: true and collectiveId are required' }, 400);
+  }
+
+  const { data: membership } = await supabase
+    .from('collective_members')
+    .select('id')
+    .eq('collective_id', collectiveId)
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (!membership) return new Response('Forbidden', { status: 403 });
+
+  const { data: collective, error: collectiveError } = await supabase
+    .from('collectives')
+    .select('timezone')
+    .eq('id', collectiveId)
+    .single();
+  if (collectiveError) throw collectiveError;
+
+  const weekStart = weekStartKey(toZonedTime(new Date(), collective.timezone), 0);
+
+  const { error: clearError } = await supabase
+    .from('weekly_assignments')
+    .delete()
+    .eq('collective_id', collectiveId)
+    .eq('week_start', weekStart)
+    .eq('status', 'pending');
+  if (clearError) throw clearError;
+
+  const { data: draft, error: draftError } = await supabase
+    .from('draft_state')
+    .upsert(
+      { collective_id: collectiveId, week_start: weekStart, status: 'pending' },
+      { onConflict: 'collective_id,week_start' }
+    )
+    .select('id, collective_id, week_start, collectives(timezone)')
+    .single();
+  if (draftError) throw draftError;
+
+  return [draft as unknown as DraftState];
+}
+
+/**
+ * Claim the week, assign it, and give the claim back if nothing was assigned.
+ *
+ * The claim is a conditional UPDATE (pending -> complete), so two overlapping
+ * invocations cannot both win it. Previously the rows were inserted first and
+ * the draft marked complete afterwards, unchecked: if that second step failed,
+ * or two ticks overlapped, the next tick inserted the whole week again.
+ */
+async function autoAssign(ds: DraftState) {
+  const { data: claimed, error: claimError } = await supabase
+    .from('draft_state')
+    .update({ status: 'complete' })
+    .eq('id', ds.id)
+    .eq('status', 'pending')
+    .select('id');
+  if (claimError) throw claimError;
+  if (!claimed || claimed.length === 0) return; // someone else has it
+
+  let assignedTo: string[] = [];
+  try {
+    assignedTo = await assignWeek(ds);
+  } catch (err) {
+    await release(ds.id);
+    throw err;
+  }
+  if (assignedTo.length === 0) {
+    await release(ds.id); // nothing to assign yet (no members or tasks): try again next tick
+    return;
+  }
+
+  // The week is assigned and committed. A failed push must not undo that or stop
+  // the others being told.
+  for (const userId of assignedTo) {
+    try {
+      await notifyUser(userId, {
+        title: 'Tasks Assigned!',
+        body: "The Collective's weekly tasks have been assigned, Comrade. Check your duties.",
+      });
+    } catch (err) {
+      console.warn(`push to ${userId} failed:`, errorMessage(err));
+    }
+  }
+}
+
+async function release(draftId: string) {
+  const { error } = await supabase.from('draft_state').update({ status: 'pending' }).eq('id', draftId);
+  if (error) console.warn(`could not release draft ${draftId}:`, errorMessage(error));
+}
+
+/** Builds and inserts the week's assignments. Returns the members to notify, or [] if none were made. */
+async function assignWeek(ds: DraftState): Promise<string[]> {
   const collectiveId = ds.collective_id;
   const weekStart = ds.week_start;
   const timezone = ds.collectives?.timezone ?? 'UTC';
@@ -71,7 +220,7 @@ async function autoAssign(ds: {
   if (memberErr) throw new Error(`collective_members: ${memberErr.message}`);
 
   const memberIds = (memberRows ?? []).map((m: { user_id: string }) => m.user_id);
-  if (memberIds.length === 0) return;
+  if (memberIds.length === 0) return [];
 
   const prevWeekStart = getPrevWeekStart(weekStart);
   const { data: ledgerRows, error: ledgerErr } = await supabase
@@ -89,8 +238,7 @@ async function autoAssign(ds: {
     creditsByUser[row.user_id] = (creditsByUser[row.user_id] ?? 0) + row.delta;
   }
 
-  const shuffled = [...memberIds].sort(() => Math.random() - 0.5);
-  const sortedMembers = shuffled.sort(
+  const sortedMembers = shuffle(memberIds).sort(
     (a, b) => (creditsByUser[b] ?? 0) - (creditsByUser[a] ?? 0)
   );
 
@@ -100,8 +248,21 @@ async function autoAssign(ds: {
     .or(`is_custom.eq.false,created_by_collective_id.eq.${collectiveId}`);
   if (taskErr) throw new Error(`task_library: ${taskErr.message}`);
 
-  const taskPool = (allTasks ?? []).map((t: { id: string; name: string }) => t.id);
-  if (taskPool.length === 0) return;
+  // Tasks already handed out this week (a forced re-run keeps completed ones)
+  // stay with whoever has them.
+  const { data: existing, error: existingErr } = await supabase
+    .from('weekly_assignments')
+    .select('task_id')
+    .eq('collective_id', collectiveId)
+    .eq('week_start', weekStart)
+    .neq('status', 'reassigned');
+  if (existingErr) throw new Error(`weekly_assignments: ${existingErr.message}`);
+  const taken = new Set((existing ?? []).map((a: { task_id: string }) => a.task_id));
+
+  const taskPool = (allTasks ?? [])
+    .map((t: { id: string; name: string }) => t.id)
+    .filter((id: string) => !taken.has(id));
+  if (taskPool.length === 0) return [];
 
   const { data: prefRows, error: prefErr } = await supabase
     .from('task_preferences')
@@ -137,7 +298,7 @@ async function autoAssign(ds: {
     if (!anyAssigned) break;
   }
 
-  if (assignments.length === 0) return;
+  if (assignments.length === 0) return [];
 
   const creditsValue = Math.floor(WEEKLY_CREDIT_POOL / assignments.length);
 
@@ -166,14 +327,18 @@ async function autoAssign(ds: {
 
   const { error: insertErr } = await supabase.from('weekly_assignments').insert(insertRows);
   if (insertErr) throw new Error(`weekly_assignments insert: ${insertErr.message}`);
-  await supabase.from('draft_state').update({ status: 'complete' }).eq('id', ds.id);
 
-  for (const userId of memberIds) {
-    await notifyUser(userId, {
-      title: 'Tasks Assigned!',
-      body: "The Collective's weekly tasks have been assigned, Comrade. Check your duties.",
-    });
+  return memberIds;
+}
+
+/** Fisher-Yates. `sort(() => Math.random() - 0.5)` is biased and engine-dependent. */
+function shuffle<T>(items: T[]): T[] {
+  const a = [...items];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
   }
+  return a;
 }
 
 function pickPreferred(

@@ -53,6 +53,8 @@ export interface Database {
           prosperity_streak: number;
           /** week_start of the last week evaluated. Server-owned. */
           prosperity_week: string | null;
+          /** Monday of the week the weekly reset last ran for. Server-owned (migration 020). */
+          reset_week: string | null;
         };
         Insert: {
           id?: string;
@@ -65,6 +67,7 @@ export interface Database {
           created_at?: string;
           prosperity_streak?: number;
           prosperity_week?: string | null;
+          reset_week?: string | null;
         };
         Update: {
           name?: string;

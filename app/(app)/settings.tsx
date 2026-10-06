@@ -17,7 +17,6 @@ import { PropagandaButton } from '../../components/ui/PropagandaButton';
 import { CONFIG } from '../../constants/config';
 import { COLORS } from '../../constants/theme';
 import { haptics } from '../../lib/haptics';
-import { collectiveWeekStart } from '../../lib/draft';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCollectiveStore } from '../../store/useCollectiveStore';
@@ -334,7 +333,6 @@ export default function SettingsScreen() {
       {__DEV__ && collective && profile && (
         <DevSection
           collectiveId={collective.id}
-          timezone={collective.timezone}
           onAssigned={() => fetchAssignments(collective.id, profile.id, collective.timezone)}
         />
       )}
@@ -378,11 +376,9 @@ function AdminSection() {
 
 function DevSection({
   collectiveId,
-  timezone,
   onAssigned,
 }: {
   collectiveId: string;
-  timezone: string;
   onAssigned: () => void;
 }) {
   const [loading, setLoading] = useState(false);
@@ -392,33 +388,12 @@ function DevSection({
     setLoading(true);
     setStatus('');
     try {
-      const weekStart = collectiveWeekStart(timezone);
-
-      const { error: delErr } = await supabase
-        .from('weekly_assignments')
-        .delete()
-        .eq('collective_id', collectiveId)
-        .eq('week_start', weekStart)
-        .eq('status', 'pending');
-      if (delErr) throw new Error(`Clear assignments: ${delErr.message}`);
-
-      const { error: upsertErr } = await supabase
-        .from('draft_state')
-        .upsert(
-          { collective_id: collectiveId, week_start: weekStart, status: 'pending' },
-          { onConflict: 'collective_id,week_start' }
-        );
-      if (upsertErr) throw new Error(`Upsert draft_state: ${upsertErr.message}`);
-
-      const { error: resetErr } = await supabase
-        .from('draft_state')
-        .update({ status: 'pending' })
-        .eq('collective_id', collectiveId)
-        .eq('week_start', weekStart);
-      if (resetErr) throw new Error(`Reset draft_state: ${resetErr.message}`);
-
+      // The function does the clearing and re-opening itself, with the service
+      // role: members can no longer delete assignments or write draft_state
+      // (migration 020). It accepts this call only from a profile with
+      // is_admin = true, which can be set only from the Supabase SQL editor.
       const { error: fnErr } = await supabase.functions.invoke('auto-assign', {
-        body: { force: true },
+        body: { force: true, collectiveId },
       });
 
       if (fnErr) {

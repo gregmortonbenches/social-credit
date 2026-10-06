@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
 
   const { data: collectives, error } = await supabase
     .from('collectives')
-    .select('id, timezone');
+    .select('id, timezone, reset_week');
 
   if (error) return new Response(JSON.stringify({ error: String(error) }), { status: 500 });
 
@@ -24,16 +24,20 @@ Deno.serve(async (req) => {
 
   for (const collective of collectives ?? []) {
     try {
+      // A Collective is due when its local week has moved past the one it last
+      // reset into. This replaces "is it Monday 00:xx right now?", which skipped
+      // the whole week if the hourly cron missed that one hour: nothing settled,
+      // no draft_state for the next week, so no tasks were ever assigned. Every
+      // step below is idempotent, so an extra run in the same week is harmless.
       const localNow = toZonedTime(utcNow, collective.timezone);
-      const dayOfWeek = localNow.getDay();
-      const hour = localNow.getHours();
+      const thisWeek = weekStartKey(localNow, 0);
 
-      if (dayOfWeek === 1 && hour === 0) {
-        await runWeeklyReset(collective.id, collective.timezone);
+      if (!collective.reset_week || collective.reset_week < thisWeek) {
+        await runWeeklyReset(collective.id, collective.timezone, thisWeek);
         results.push(`Reset ${collective.id}`);
       }
     } catch (err) {
-      results.push(`Error ${collective.id}: ${String(err)}`);
+      results.push(`Error ${collective.id}: ${errorMessage(err)}`);
     }
   }
 
@@ -42,9 +46,15 @@ Deno.serve(async (req) => {
   });
 });
 
-async function runWeeklyReset(collectiveId: string, timezone: string) {
+/** supabase-js returns PostgREST errors as plain objects, which String() flattens to "[object Object]". */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message);
+  return JSON.stringify(err);
+}
+
+async function runWeeklyReset(collectiveId: string, timezone: string, thisWeek: string) {
   const nowDate = new Date();
-  const now = nowDate.toISOString();
   // The week that just ended, and the one after the new one, both worked out in
   // the collective's timezone. This used to take the UTC date, which is wrong for
   // any collective at or west of UTC (Monday 00:00 local is already Monday in UTC
@@ -52,81 +62,50 @@ async function runWeeklyReset(collectiveId: string, timezone: string) {
   const localNow = toZonedTime(nowDate, timezone);
   const weekStart = weekStartKey(localNow, -1);
 
-  // Fail any incomplete assignments from the previous week
-  const { data: failedAssignments } = await supabase
-    .from('weekly_assignments')
-    .select('id, user_id, credits_value')
-    .eq('collective_id', collectiveId)
-    .eq('week_start', weekStart)
-    .eq('status', 'pending')
-    .lt('due_date', now);
-
-  for (const assignment of failedAssignments ?? []) {
-    await supabase
-      .from('weekly_assignments')
-      .update({ status: 'failed' })
-      .eq('id', assignment.id);
-
-    if (assignment.credits_value) {
-      await supabase.rpc('credits_transaction', {
-        p_user_id: assignment.user_id,
-        p_collective_id: collectiveId,
-        p_delta: -assignment.credits_value,
-        p_reason: 'task_failed',
-        p_reference_id: assignment.id,
-      });
-    }
-  }
-
-  // Award credits for completed assignments not yet settled
-  const { data: completedAssignments } = await supabase
-    .from('weekly_assignments')
-    .select('id, user_id, credits_value')
-    .eq('collective_id', collectiveId)
-    .eq('week_start', weekStart)
-    .eq('status', 'complete');
-
-  for (const assignment of completedAssignments ?? []) {
-    const { data: alreadyAwarded } = await supabase
-      .from('credit_ledger')
-      .select('id')
-      .eq('reference_id', assignment.id)
-      .eq('reason', 'task_complete')
-      .maybeSingle();
-
-    if (!alreadyAwarded && assignment.credits_value) {
-      await supabase.rpc('credits_transaction', {
-        p_user_id: assignment.user_id,
-        p_collective_id: collectiveId,
-        p_delta: assignment.credits_value,
-        p_reason: 'task_complete',
-        p_reference_id: assignment.id,
-      });
-    }
-  }
+  // Fail what is overdue and pay what is complete but unpaid. One database
+  // transaction per Collective-week (migration 020): a task is marked failed
+  // together with its penalty or not at all. This used to be a status update
+  // followed by an rpc whose error nobody read, so a transient failure left a
+  // task 'failed' with no penalty, and no later run would look at it again.
+  const { error: settleError } = await supabase.rpc('settle_assignments', {
+    p_collective_id: collectiveId,
+    p_week_start: weekStart,
+    p_now: nowDate.toISOString(),
+  });
+  if (settleError) throw settleError;
 
   await settleProsperity(collectiveId, weekStart);
 
   // Promote anyone who joined mid-week. join_collective_by_code() enrols a
   // joiner as 'pending' unless they joined on a Monday in the collective's
-  // timezone (migration 013), and Monday 00:00 local is exactly now — so this is
-  // where they become active. Without this step a mid-week joiner stays pending
+  // timezone (migration 013), and the new week starting is exactly when they
+  // become active. Without this step a mid-week joiner stays pending
   // indefinitely: they can see the collective but auto-assign skips them, so
   // they never receive a task.
-  await supabase
+  const { error: promoteError } = await supabase
     .from('collective_members')
     .update({ status: 'active' })
     .eq('collective_id', collectiveId)
     .eq('status', 'pending');
+  if (promoteError) throw promoteError;
 
   // Create pending draft_state for the new week — auto-assign will fill it Sunday 14:00
   const nextWeekStart = weekStartKey(localNow, 1);
-  await supabase
+  const { error: draftError } = await supabase
     .from('draft_state')
     .upsert(
       { collective_id: collectiveId, week_start: nextWeekStart, status: 'pending' },
-      { onConflict: 'collective_id,week_start' }
+      { onConflict: 'collective_id,week_start', ignoreDuplicates: true }
     );
+  if (draftError) throw draftError;
+
+  // Last, and only if everything above succeeded: a failure anywhere leaves
+  // reset_week behind, so the next hourly run tries again.
+  const { error: stampError } = await supabase
+    .from('collectives')
+    .update({ reset_week: thisWeek })
+    .eq('id', collectiveId);
+  if (stampError) throw stampError;
 }
 
 /**
@@ -176,23 +155,4 @@ async function settleProsperity(collectiveId: string, weekStart: string) {
     })
     .eq('id', collectiveId);
   if (error) throw error;
-}
-
-async function notifyUser(userId: string, notification: { title: string; body: string }) {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('device_push_token')
-    .eq('id', userId)
-    .single();
-
-  if (!profile?.device_push_token) return;
-
-  await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-notification`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-    },
-    body: JSON.stringify({ token: profile.device_push_token, ...notification }),
-  });
 }

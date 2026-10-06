@@ -210,6 +210,29 @@ is what `npm run test:db` now does on every push.
 
 ---
 
+## 7. FIXED — The economy was writable from the app (migration 020)
+
+**Severity: critical.** Found in the October 2026 whole-codebase review; four
+policy/grant mistakes of the same shape as §1 and 014/016/019. All are fixed in
+migration 020 and each has a reproducing assertion in `supabase/tests/rls.test.sql`
+(run against the schema without 020, the first one fails).
+
+| Table | What any signed-in user could do | Fix |
+|---|---|---|
+| `profiles` | `UPDATE total_credits = 1000000, is_admin = true` on their own row: table-wide grant (005), policy with no `WITH CHECK`. `is_admin` also satisfies the `app_config` UPDATE policy. | Column grants only: UPDATE `(username, device_push_token)`, INSERT `(id, username, email, age_verified_at)` |
+| `weekly_assignments` | `INSERT` a row with `status = 'complete'`, `credits_value = 100000` (policy checked only `auth.role()`), then call `award-task-credits`. `DELETE` any assignment in the Collective (009) to dodge a penalty. `UPDATE` a `failed` row to `complete` and be re-paid. | INSERT and DELETE revoked; UPDATE policy now also pins the row's *current* status to `pending`/`complete` |
+| `draft_state` | Set the week `complete`, so `auto-assign` skipped the Collective and nobody could fail. | INSERT and UPDATE revoked (read-only) |
+| `denouncement_votes` | The accused or accuser voting on their own case, or on one not up for a vote. | Policy requires a juror and `status = 'responded'` |
+
+The same migration moves money-handling out of Edge Function code, where errors
+were never read: `credits_transaction` is idempotent behind a unique index on
+`credit_ledger (reference_id, reason, user_id)`; `settle_assignments` and
+`settle_denouncements` apply a status change and its credits in one transaction;
+`weekly_assignments` is unique per `(collective, task, week)`.
+
+**Not covered by any test before this:** `profiles` and the INSERT/DELETE paths.
+The earlier suite only asserted the holes that had already been found.
+
 ## Related, not a vulnerability
 
 **The date of birth is discarded — now recorded.** `sign-up.tsx` validated the

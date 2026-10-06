@@ -1,6 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
 import { create } from 'zustand';
-import { CONFIG } from '../constants/config';
 import type { Profile } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 
@@ -22,22 +21,27 @@ async function fetchOrCreateProfile(session: Session): Promise<Profile | null> {
     (session.user.user_metadata?.username as string | undefined) ??
     session.user.email?.split('@')[0] ??
     'comrade';
-  const { data: created, error: upsertError } = await supabase
-    .from('profiles')
-    .upsert({
-      id: session.user.id,
-      username,
-      email: session.user.email ?? '',
-      total_credits: CONFIG.STARTING_CREDITS,
-      // Carry the age-gate record through this fallback path too, so an account
-      // that lands here is not indistinguishable from an unverified one.
-      age_verified_at: (session.user.user_metadata?.age_verified_at as string | undefined) ?? null,
-    })
-    .select()
-    .single();
+  // INSERT-only, naming only identity columns. `total_credits` takes its column
+  // default and `is_admin` stays false: the client has no UPDATE or INSERT right
+  // on either (migration 020), and an upsert would need UPDATE on every column it
+  // writes. If a row appeared in the meantime (the trigger beat us), re-read it.
+  const { error: insertError } = await supabase.from('profiles').insert({
+    id: session.user.id,
+    username,
+    email: session.user.email ?? '',
+    // Carry the age-gate record through this fallback path too, so an account
+    // that lands here is not indistinguishable from an unverified one.
+    age_verified_at: (session.user.user_metadata?.age_verified_at as string | undefined) ?? null,
+  });
+  if (insertError && insertError.code !== '23505') {
+    console.error('[auth] profile insert error:', JSON.stringify(insertError));
+  }
 
-  if (upsertError) console.error('[auth] profile upsert error:', JSON.stringify(upsertError));
-  console.log('[auth] upsert result:', created ? 'created' : 'null');
+  const { data: created } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', session.user.id)
+    .maybeSingle();
   return created ?? null;
 }
 
