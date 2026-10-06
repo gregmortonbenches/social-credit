@@ -22,7 +22,7 @@ declare
 begin
   select p.id, cm.collective_id into v_me, v_collective
   from profiles p join collective_members cm on cm.user_id = p.id and cm.status = 'active'
-  where p.email = 'gregmorton03@gmail.com'
+  where p.email = 'greg_morton@hotmail.co.uk'
   order by cm.joined_at desc limit 1;
 
   -- 1. You v Natasha, 25 hours old.

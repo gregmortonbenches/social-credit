@@ -18,5 +18,5 @@ where d.id::text like 'feed0000-%'
 order by d.id;
 
 select username, total_credits from profiles
-where email = 'gregmorton03@gmail.com' or email like 'seed-%@seed.invalid'
+where email = 'greg_morton@hotmail.co.uk' or email like 'seed-%@seed.invalid'
 order by username;

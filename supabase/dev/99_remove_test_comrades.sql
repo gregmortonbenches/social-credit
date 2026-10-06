@@ -42,6 +42,6 @@ select p.username, p.email, cm.status
 from collective_members cm join profiles p on p.id = cm.user_id
 where cm.collective_id = (
   select collective_id from collective_members
-  where user_id = (select id from profiles where email = 'gregmorton03@gmail.com')
+  where user_id = (select id from profiles where email = 'greg_morton@hotmail.co.uk')
   order by joined_at desc limit 1
 );

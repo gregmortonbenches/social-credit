@@ -38,5 +38,5 @@ tasks the comrades held.
   the voting screen as a second person you need a second real account.
 - Test comrades are recognisable by email (`seed-*@seed.invalid`) and fixed ids
   starting `feed0000-`.
-- The scripts use `gregmorton03@gmail.com` to find your collective; change it at
+- The scripts use `greg_morton@hotmail.co.uk` to find your collective; change it at
   the top of scripts 01, 03 and 05 and at the bottom of 99 if that is wrong.
