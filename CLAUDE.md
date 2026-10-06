@@ -51,6 +51,8 @@ This is currently a private project for personal use. It is not a commercial pro
 
 **RLS must be enforced.** Users may only read/write rows where `collective_id` matches a collective they are an active member of. Never bypass Row Level Security from client code.
 
+**The economy is server-owned.** The client may write only what a column grant names: `profiles` (`username`, `device_push_token`; INSERT of identity columns only), `weekly_assignments` (`status`, `completed_at`, and only on rows that are `pending`/`complete`), and `denouncements` (`explanation`, `status`, `responded_at`). `weekly_assignments` has no client INSERT or DELETE, `draft_state` is read-only, `total_credits` and `is_admin` are never client-writable. Credits move only through `credits_transaction` (service role, idempotent) via the `settle_*` functions and Edge Functions. This is the same lesson as the `collective_members` rule: every hole found here was a policy that read correctly and a blanket grant underneath it (SECURITY-FINDINGS §7). Any new table or column that holds money, status or deadlines gets a column-level grant and a test in `rls.test.sql`.
+
 **Never write `collective_members` from the client.** The table has no INSERT or UPDATE policy for `authenticated` (migration 013). Joining, creating, pausing, resuming and leaving all go through the SECURITY DEFINER RPCs, which check the *current* status before writing — something a `WITH CHECK` clause cannot do. Do not add a policy to "fix" a permission error here; add or extend an RPC.
 
 **Age gate is mandatory.** Sign-up must block users under 16 via a date-of-birth field check, and record that it passed in `profiles.age_verified_at`. The date of birth itself is deliberately not stored — the timestamp answers the compliance question without retaining the extra personal data.
@@ -165,7 +167,7 @@ Admins can override any value at runtime via the `app_config` Supabase table wit
 `id` · `username` · `email` · `total_credits` (int, default 500) · `device_push_token` · `anonymous_token` (set on deletion) · `age_verified_at` (16+ check passed; the DOB itself is not stored) · `deleted_at` (30-day grace period) · `created_at`
 
 **`collectives`**
-`id` · `name` · `display_name` (name + " Collective") · `code` (char 5, unique) · `timezone` (IANA string) · `created_by` · `rooms` (jsonb) · `created_at` · `prosperity_streak` (int, server-owned) · `prosperity_week` (date, last week evaluated, server-owned)
+`id` · `name` · `display_name` (name + " Collective") · `code` (char 5, unique) · `timezone` (IANA string) · `created_by` · `rooms` (jsonb) · `created_at` · `prosperity_streak` (int, server-owned) · `prosperity_week` (date, last week evaluated, server-owned) · `reset_week` (date, Monday of the week `weekly-reset` last ran for, server-owned)
 
 **`collective_members`**
 `id` · `collective_id` · `user_id` · `status` (active | paused | pending | left) · `joined_at` · `pause_started_at` · `pause_ended_at`
@@ -200,7 +202,7 @@ Unique constraint on `(user_id, collective_id, task_id)`. Used by `auto-assign` 
 
 Realtime enabled on: `weekly_assignments`, `denouncements`, `collective_members`, `credit_ledger`, `draft_state`
 
-RLS: users read/write only rows belonging to their collective. `credit_ledger` inserts via service role only. `app_config` updates via admin flag only.
+RLS: users read/write only rows belonging to their collective, within the column grants listed under Absolute Rules. `credit_ledger` inserts via service role only, and it is unique on `(reference_id, reason, user_id)` so a payout cannot be applied twice. `app_config` updates via admin flag only (`profiles.is_admin`, set by hand in the SQL editor).
 
 ---
 
@@ -212,7 +214,8 @@ RLS: users read/write only rows belonging to their collective. `credit_ledger` i
 - Task failed: `-credits_value` (symmetrical) — deducted by `weekly-reset` when assignment is marked failed at Monday 00:00
 - Denouncement upheld: accused `-credits_value`, accuser `+DENOUNCE_ACCUSER_REWARD`
 - Denouncement dismissed: accuser `-DENOUNCE_ACCUSER_PENALTY`
-- 2-person abuse (≥3 denouncements in 60 days): both `-DENOUNCE_TWO_PERSON_ABUSE_PENALTY`, counter resets
+- 2-person abuse (≥3 denouncements in 60 days, withdrawn ones counted): both `-DENOUNCE_TWO_PERSON_ABUSE_PENALTY`, counter resets from the last penalty
+- All of the above are implemented in `settle_denouncements` / `settle_assignments` (migration 020, decision 48). The amounts are passed in by `denounce-timeout` as mirrors of `CONFIG`
 - Credits cumulative all-time
 - Denouncement credits excluded from collective prosperity quota
 
@@ -277,18 +280,27 @@ with a line saying which — opening the modal in that state was a dead end.
 
 ---
 
+## Deploying
+
+- **Migrations are applied by hand, not with `supabase db push`.** 001–019 were applied through the SQL editor, so the CLI's migration history is empty and `db push` would try to re-run all of them. Apply a new migration by pasting it into the dashboard SQL editor (project ref `mtoypwkkabwwrxtiybnp`), or `supabase db query --linked -f <file>`. `npm run test:db` first.
+- **Edge Functions:** `supabase functions deploy <names>` from the repo root, after the migration they depend on is live. The three functions that import `_shared/` cannot be edited in the dashboard.
+- 020 is applied and the four changed functions are deployed (as of 2026-10-06). `profiles.is_admin` is set for the founder's account, which enables the dev Force Assign button.
+- The database tests need a Postgres on PATH (`brew install postgresql@16`); with a socket path that is too long, use TCP: `PGHOST=127.0.0.1 PGPORT=… PGUSER=postgres bash supabase/tests/run.sh`.
+
+---
+
 ## Edge Functions
 
 | Function | Schedule | Status | Purpose |
 |---|---|---|---|
 | `weekly-reset` | Cron hourly | Deployed | Runs for any Collective whose `reset_week` is behind its current local week (so a missed tick catches up) — settle credits via `settle_assignments`, update the prosperity streak, create pending draft_state row. Week boundaries are computed in the collective's timezone (it used the UTC date, wrong at or west of UTC) |
-| `auto-assign` | Cron every 5 min | Deployed | Preference-based auto-assignment on Sunday ≥14:00 collective timezone |
-| `denounce-timeout` | Cron hourly | Deployed | Apply auto-guilt to unanswered denouncements |
+| `auto-assign` | Cron every 5 min | Deployed | Preference-based auto-assignment on Sunday ≥14:00 collective timezone. Claims the week with a conditional `draft_state` UPDATE before inserting (releases it on failure), skips tasks already assigned that week, isolates failures per Collective. Also accepts `{ force: true, collectiveId }` from an `is_admin` user's JWT (the dev button) |
+| `denounce-timeout` | Cron hourly | Deployed | Calls `settle_denouncements`: auto-guilt for unanswered cases, verdicts for answered ones once the jurors have voted or the vote window closed. Pushes only the auto-guilty message |
 | `send-notification` | HTTP (called by other functions) | Deployed | Send FCM push via firebase-admin — requires `Authorization: Bearer <SERVICE_ROLE_KEY>` header |
 | `delete-account` | HTTP (called by client) | Deployed | Called by client with user JWT; uses service role internally |
 | `notify-collective` | HTTP (called by client) | Deployed | Sends pushes for client-caused events (denounced / resisted / joined). User JWT; derives recipient and message server-side from the row, so a caller cannot push arbitrary text at another member |
 | `overdue-reminder` | Cron hourly | Deployed | Pushes the overdue warning once per assignment, guarded by `notified_overdue_at` |
-| `award-task-credits` | HTTP (called by client) | Deployed | Settles completion credits immediately. User JWT; verifies caller owns the assignment, reads the amount from the row, idempotent against `credit_ledger` |
+| `award-task-credits` | HTTP (called by client) | Deployed | Settles completion credits immediately. User JWT; verifies caller owns the assignment, reads the amount from the row; idempotent because `credits_transaction` is (unique ledger index), so a double tap or a race with `weekly-reset` cannot pay twice |
 
 Timezone note: crons run UTC. Each function computes the collective's local time using its IANA timezone string and `date-fns-tz`. Never hardcode UTC offsets.
 
@@ -473,7 +485,7 @@ There is no `FCM_SERVER_KEY`. Google shut the legacy server-key API down in 2024
 | 42 | Denouncement writes and withdrawal | Migration 016. The accused's UPDATE policy was `USING (accused_id = auth.uid())` with no `WITH CHECK` over a table-wide grant, so the accused could set their own `outcome` and `status` — acquitting themselves before any vote. Now column-limited to `(explanation, status, responded_at)` with `WITH CHECK (status = 'responded')`. Adds a `withdrawn` status and `withdraw_denouncement`, usable by the accuser only while the case is still `open`; the row is kept rather than deleted so the two-person abuse counter still sees it, otherwise denounce-and-withdraw would be untracked harassment. The denounce modal now has a confirmation step naming the accused and the duty. |
 | 43 | Preference payoff | Own task cards show "YOUR 2ND CHOICE" or "NOT ONE OF YOUR PICKS" (the latter only once the member has ranked something, else it is noise), and the preferences screen explains that highest earners pick first. Ranking was the most effortful interaction in the app with no visible consequence. |
 | 44 | Connection state | `useConnectionStore` holds device connectivity (NetInfo) and the health of every realtime channel. All four `.subscribe()` calls now report their status — previously none did, so a dropped channel stayed dropped in silence and the screen quietly went stale. `ConnectionBanner` on the home screen distinguishes "offline" from "online but not live", because to a user both look identical: the data just stops changing. Coming back online re-fetches, since resubscribing does not replay what was missed. |
-| 45 | Testing | `npm test` runs Jest over the pure logic (timezone helpers), under four device timezones in CI, because the point of those helpers is that the answer does not depend on the device. `npm run test:db` applies every migration to an empty Postgres and asserts the RLS policies and RPCs behave — 18 assertions, each reproducing a specific hole that was found and closed. Every security finding in this project was a policy that read correctly and was not, so the database tests are the ones that matter: the critical PUBLIC-execute hole was found by this suite on its first run. CI runs all three jobs on every push. |
+| 45 | Testing | `npm test` runs Jest over the pure logic (timezone helpers), under four device timezones in CI, because the point of those helpers is that the answer does not depend on the device. `npm run test:db` applies every migration to an empty Postgres and asserts the RLS policies and RPCs behave — 50 assertions as of migration 020, each reproducing a specific hole that was found and closed. Every security finding in this project was a policy that read correctly and was not, so the database tests are the ones that matter: the critical PUBLIC-execute hole was found by this suite on its first run. CI runs all three jobs on every push. |
 | 46 | One heavy rule per screen | The title rule (3px red) is the only thick red bar on a panel. Cards below it use a 3px red **left** edge, not a 4px top border — two heavy bars a few pixels apart read as clutter. The propaganda poster is 160px, not 220, so content starts higher. Empty/idle states say less: the prosperity poster shows no progress bar until there is a streak to measure, and with nobody else in the Collective the Denounce button and its hint are hidden because the "you stand alone" notice already says what to do. |
 | 47 | Collective prosperity is a streak | The Collective page is about the household's long-run prosperity, disconnected from the weekly credit quota (which stays on the Scoreboard). Points only accrue if **all** duties are completed in a week, and a failed week sends it back to zero. An upheld denouncement also fails an otherwise perfect week; an empty week is neutral. Chosen over accumulating points because a streak is easy to read and the reset stings. Stored on `collectives` (migration 019), settled in `weekly-reset`, never client-writable. Founder-only collective rename was added to Settings at the same time (`renameCollective`; the founder-only UPDATE policy dates from migration 002, the same rule as Edit Rooms). |
 | 48 | Settlement is in the database | Money moves in SQL, not in Edge Function code: `credits_transaction` is idempotent (unique ledger index), `settle_assignments` fails overdue tasks and pays completed ones, `settle_denouncements` resolves timeouts and votes, each in one transaction, so a verdict and its credits cannot diverge. The functions pass the tunable amounts in (mirrors of `CONFIG`). `weekly-reset` acts whenever `collectives.reset_week` is behind the current local week rather than only in the Monday 00:00 hour, so a missed cron tick catches up. `auto-assign` claims the draft with a conditional UPDATE before inserting. Jurors are the active members other than the two parties; a tie or no votes by `DENOUNCE_VOTE_WINDOW_HOURS` is dismissed; with no jurors (two-person Collective) an answered case is upheld outright. |
@@ -533,6 +545,7 @@ missing 009's DELETE grant and policy — re-run it there.
 - Holiday Pause task redistribution (DB flag set but tasks not yet redistributed)
 - `peoples_communes` achievement has no event trigger — requires a time-based check (1 month active), not wired
 - `rally_the_peasants` + `propaganda` achievements not triggerable — require invite tracking, no schema support
+- No push notification for a denouncement resolved by vote (push copy is fixed in the table above; none was specified for it). Verdicts appear in the app via realtime
 - Draft achievements (`production_team`, `production_brigade`, `planned_economy`) — need wiring inside `auto-assign` Edge Function
 - `subscribeToDenouncments` not yet mounted in any component — when connected, must pass `userId` as second argument to enable resolution achievement checks
 - Dev-only "Force Assign Tasks" button in Settings (`__DEV__` gated, never ships) — calls `auto-assign` with `{ force: true, collectiveId }`. The function accepts that from a signed-in user only if `profiles.is_admin` is true (set by hand in the SQL editor: `update profiles set is_admin = true where email = '...'`; the client cannot write it) and they belong to the Collective; it then clears this week's pending assignments, re-opens the draft and assigns.
