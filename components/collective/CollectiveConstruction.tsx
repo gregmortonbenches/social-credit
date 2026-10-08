@@ -15,7 +15,7 @@ import { CONFIG } from '../../constants/config';
 // 47 — one missed week sends the whole skyline back to this, not one
 // building, because the streak itself resets to zero with no partial credit.
 
-const VIEW_W = 300;
+const VIEW_W = 320;
 const VIEW_H = 150;
 const GROUND_Y = 128;
 const INK = '#1A0A05';
@@ -132,34 +132,92 @@ function GoldenSpire({ cx }: { cx: number }) {
 
 const BUILDERS: Array<(args: { cx: number }) => ReactElement> = [Silo, Hut, Factory, GreatLeap, GoldenSpire];
 
-/** The structure not yet earned: a rising core inside a scaffold, with a crane. */
+/**
+ * A tower crane: mast, a T-top (jib toward the building, counter-jib with a
+ * counterweight behind it) and a hoist cable that drops a lifted block down
+ * to roughly where the build has got to. The earlier version was just an
+ * mast with one arm and a flag that didn't touch anything — it read as a
+ * stray mark, not a crane, especially at zero progress where it's the only
+ * moving part on the card.
+ */
+function Crane({ cx, w, fullH, riseH }: { cx: number; w: number; fullH: number; riseH: number }) {
+  const mastX = cx + w / 2 + 9;
+  const topY = GROUND_Y - fullH - 20;
+  const jibInnerX = cx - w * 0.15;
+  const counterX = mastX + 13;
+  const hookX = cx + w * 0.05;
+  const hookBottomY = Math.max(topY + 12, Math.min(GROUND_Y - riseH - 3, GROUND_Y - 6));
+
+  return (
+    <>
+      {/* counter-jib + counterweight, behind the mast */}
+      <Line x1={mastX} y1={topY} x2={counterX} y2={topY} stroke={INK} strokeWidth={1.8} />
+      <Rect x={counterX - 3} y={topY} width={6} height={5} fill={INK} />
+      {/* mast */}
+      <Line x1={mastX} y1={GROUND_Y} x2={mastX} y2={topY} stroke={INK} strokeWidth={2.2} />
+      {/* operator cab */}
+      <Rect x={mastX - 2} y={topY + 1} width={4} height={6} fill={INK} />
+      {/* main jib, over the building */}
+      <Line x1={mastX} y1={topY} x2={jibInnerX} y2={topY} stroke={INK} strokeWidth={1.8} />
+      {/* hoist cable + the block it's lifting, roughly up to the current build height */}
+      <Line x1={hookX} y1={topY} x2={hookX} y2={hookBottomY} stroke={INK} strokeWidth={1} />
+      <Rect x={hookX - 2.5} y={hookBottomY} width={5} height={5} fill={GOLD} stroke={INK} strokeWidth={0.8} />
+      {/* flag at the very top of the mast */}
+      <Polygon points={`${mastX},${topY - 2} ${mastX},${topY - 10} ${mastX + 9},${topY - 6}`} fill={RED} />
+    </>
+  );
+}
+
+/** A small propaganda-poster stick figure — the Collective's own hands on the build. */
+function WorkerFigure({ x, standY, toolUp = true }: { x: number; standY: number; toolUp?: boolean }) {
+  const headR = 2.4;
+  const headCy = standY - 13;
+  const shoulderY = headCy + headR + 1;
+  const hipY = shoulderY + 6;
+  return (
+    <>
+      <Line x1={x} y1={shoulderY} x2={x} y2={hipY} stroke={INK} strokeWidth={1.4} />
+      <Line x1={x} y1={hipY} x2={x - 3} y2={standY} stroke={INK} strokeWidth={1.4} />
+      <Line x1={x} y1={hipY} x2={x + 3} y2={standY} stroke={INK} strokeWidth={1.4} />
+      <Line x1={x} y1={shoulderY + 1} x2={x - 3.5} y2={shoulderY + 5} stroke={INK} strokeWidth={1.3} />
+      {toolUp ? (
+        <>
+          <Line x1={x} y1={shoulderY + 1} x2={x + 4} y2={shoulderY - 5} stroke={INK} strokeWidth={1.3} />
+          <Rect x={x + 2.8} y={shoulderY - 7} width={3.4} height={1.6} fill={INK} />
+        </>
+      ) : (
+        <Line x1={x} y1={shoulderY + 1} x2={x + 3.5} y2={shoulderY + 5} stroke={INK} strokeWidth={1.3} />
+      )}
+      <Circle cx={x} cy={headCy} r={headR} fill={INK} />
+    </>
+  );
+}
+
+/** The structure not yet earned: a rising core inside a scaffold, with a crane and a couple of comrades on it. */
 function ConstructionSite({ cx, footprint, progress }: { cx: number; footprint: Footprint; progress: number }) {
   const { width: w, height: fullH } = footprint;
   const riseH = Math.max(4, progress * fullH);
   const rungCount = Math.max(1, Math.floor(fullH / 14));
   const rungs = Array.from({ length: rungCount }, (_, i) => GROUND_Y - ((i + 1) * fullH) / (rungCount + 1));
-  const craneX = cx + w / 2 + 7;
-  const craneTopY = GROUND_Y - fullH - 12;
   const showCrane = progress < 1;
+  // a worker rides the rising core once there's enough of it to stand on;
+  // below that it would float above empty scaffold with nothing underfoot
+  const workerOnTop = riseH > 14;
 
   return (
     <>
       {/* the part already built, solid, narrower than the final footprint — a core, not the finished building */}
       <Rect x={cx - w * 0.3} y={GROUND_Y - riseH} width={w * 0.6} height={riseH} fill={INK} opacity={0.85} />
+      {riseH > 6 && <Rect x={cx - w * 0.3} y={GROUND_Y - riseH} width={w * 0.6} height={2} fill={GOLD} />}
       {/* scaffold poles + rungs, the full target height */}
       <Line x1={cx - w / 2} y1={GROUND_Y} x2={cx - w / 2} y2={GROUND_Y - fullH} stroke={SCAFFOLD} strokeWidth={1.5} />
       <Line x1={cx + w / 2} y1={GROUND_Y} x2={cx + w / 2} y2={GROUND_Y - fullH} stroke={SCAFFOLD} strokeWidth={1.5} />
       {rungs.map((y, i) => (
         <Line key={i} x1={cx - w / 2} y1={y} x2={cx + w / 2} y2={y} stroke={SCAFFOLD} strokeWidth={1} />
       ))}
-      {showCrane && (
-        <>
-          <Line x1={craneX} y1={GROUND_Y} x2={craneX} y2={craneTopY} stroke={INK} strokeWidth={2} />
-          <Line x1={craneX} y1={craneTopY} x2={craneX - w / 2 - 6} y2={craneTopY} stroke={INK} strokeWidth={2} />
-          <Line x1={craneX - w / 2 - 6} y1={craneTopY} x2={craneX - w / 2 - 6} y2={craneTopY + 8} stroke={INK} strokeWidth={1} />
-          <Polygon points={`${craneX + 2},${craneTopY} ${craneX + 2},${craneTopY - 8} ${craneX + 11},${craneTopY - 4}`} fill={RED} />
-        </>
-      )}
+      {showCrane && <Crane cx={cx} w={w} fullH={fullH} riseH={riseH} />}
+      <WorkerFigure x={cx - w / 2 - 5} standY={GROUND_Y} toolUp={!workerOnTop} />
+      {workerOnTop && <WorkerFigure x={cx - w * 0.1} standY={GROUND_Y - riseH} toolUp />}
     </>
   );
 }
