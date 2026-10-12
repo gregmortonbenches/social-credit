@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Modal, StyleSheet, TouchableOpacity } from 'react-native';
 import { ACHIEVEMENTS_BY_KEY } from '../../constants/achievements';
 import { COLORS } from '../../constants/theme';
+import { haptics } from '../../lib/haptics';
 import { useAchievementStore } from '../../store/useAchievementStore';
 
 export function AchievementUnlockOverlay() {
@@ -9,9 +10,32 @@ export function AchievementUnlockOverlay() {
   const clearUnlocked = useAchievementStore((s) => s.clearUnlocks);
   const [index, setIndex] = useState(0);
 
+  // A rubber stamp hits the paper, not fades onto it: it drops in oversized
+  // and rotated, then snaps to rest with a little overshoot. Ink (the stamp
+  // text + star) only appears once the impact has landed.
+  const impact = useRef(new Animated.Value(0)).current;
+  const ink = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     if (newlyUnlocked.length > 0) setIndex(0);
   }, [newlyUnlocked]);
+
+  useEffect(() => {
+    if (newlyUnlocked.length === 0) return;
+    impact.setValue(0);
+    ink.setValue(0);
+    Animated.sequence([
+      Animated.spring(impact, {
+        toValue: 1,
+        friction: 5,
+        tension: 140,
+        useNativeDriver: true,
+      }),
+      Animated.timing(ink, { toValue: 1, duration: 120, useNativeDriver: true }),
+    ]).start();
+    haptics.success();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, newlyUnlocked.length]);
 
   if (newlyUnlocked.length === 0) return null;
 
@@ -28,20 +52,28 @@ export function AchievementUnlockOverlay() {
     }
   }
 
+  const cardTransform = {
+    transform: [
+      { scale: impact.interpolate({ inputRange: [0, 1], outputRange: [1.6, 1] }) },
+      { rotate: impact.interpolate({ inputRange: [0, 1], outputRange: ['-6deg', '0deg'] }) },
+    ],
+    opacity: impact,
+  };
+
   return (
     <Modal visible transparent animationType="fade" onRequestClose={handleDismiss}>
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={handleDismiss}>
-        <View style={styles.card}>
-          <Text style={styles.stamp}>ACHIEVEMENT UNLOCKED</Text>
-          <Text style={styles.star}>★</Text>
-          <Text style={styles.title}>{achievement.title}</Text>
-          <Text style={styles.category}>{achievement.category.toUpperCase()}</Text>
-          <Text style={styles.description}>{achievement.description}</Text>
+        <Animated.View style={[styles.card, cardTransform]}>
+          <Animated.Text style={[styles.stamp, { opacity: ink }]}>ACHIEVEMENT UNLOCKED</Animated.Text>
+          <Animated.Text style={[styles.star, { opacity: ink }]}>★</Animated.Text>
+          <Animated.Text style={[styles.title, { opacity: ink }]}>{achievement.title}</Animated.Text>
+          <Animated.Text style={[styles.category, { opacity: ink }]}>{achievement.category.toUpperCase()}</Animated.Text>
+          <Animated.Text style={[styles.description, { opacity: ink }]}>{achievement.description}</Animated.Text>
           {newlyUnlocked.length > 1 && (
-            <Text style={styles.counter}>{index + 1} / {newlyUnlocked.length}</Text>
+            <Animated.Text style={[styles.counter, { opacity: ink }]}>{index + 1} / {newlyUnlocked.length}</Animated.Text>
           )}
-          <Text style={styles.dismiss}>{isLast ? 'TAP TO CLOSE' : 'TAP FOR NEXT'}</Text>
-        </View>
+          <Animated.Text style={[styles.dismiss, { opacity: ink }]}>{isLast ? 'TAP TO CLOSE' : 'TAP FOR NEXT'}</Animated.Text>
+        </Animated.View>
       </TouchableOpacity>
     </Modal>
   );
