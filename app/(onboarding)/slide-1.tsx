@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useRef, useState, type ComponentType } from 'react';
 import {
   Dimensions,
   FlatList,
@@ -9,6 +9,11 @@ import {
   View,
   type ListRenderItemInfo,
 } from 'react-native';
+import {
+  CollectiveIllustration,
+  PenaltyIllustration,
+  WelcomeIllustration,
+} from '../../components/onboarding/OnboardingIllustration';
 import { COLORS } from '../../constants/theme';
 import { useAuthStore } from '../../store/useAuthStore';
 
@@ -18,6 +23,7 @@ interface Slide {
   key: string;
   headline: (username: string) => string;
   body: string;
+  illustration?: ComponentType;
   ghost?: boolean;
 }
 
@@ -26,16 +32,19 @@ const SLIDES: Slide[] = [
     key: '1',
     headline: (u) => `WELCOME TO SOCIAL CREDIT, COMRADE ${u.toUpperCase()}!`,
     body: '',
+    illustration: WelcomeIllustration,
   },
   {
     key: '2',
     headline: () => 'JOIN OR ESTABLISH A COLLECTIVE',
     body: 'Share household tasks and earn credits for yourself and the good of the Collective!',
+    illustration: CollectiveIllustration,
   },
   {
     key: '3',
     headline: () => 'REMEMBER, COMRADE',
     body: 'You will be penalised for not completing tasks!',
+    illustration: PenaltyIllustration,
   },
   { key: '4', headline: () => '', body: '', ghost: true },
 ];
@@ -65,10 +74,11 @@ export default function OnboardingScreen() {
 
   function renderSlide({ item }: ListRenderItemInfo<Slide>) {
     if (item.ghost) return <View style={styles.slide} />;
+    const Illustration = item.illustration;
     return (
       <View style={styles.slide}>
         <View style={styles.posterBanner}>
-          <Text style={styles.starDecor}>★ ★ ★ ★ ★</Text>
+          {Illustration ? <Illustration /> : null}
         </View>
         <Text style={styles.headline}>{item.headline(username)}</Text>
         {item.body ? <Text style={styles.body}>{item.body}</Text> : null}
@@ -113,12 +123,13 @@ const styles = StyleSheet.create({
   posterBanner: {
     backgroundColor: COLORS.primary,
     width: '100%',
-    paddingVertical: 40,
+    height: 180,
     marginBottom: 40,
     alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 4,
+    overflow: 'hidden',
   },
-  starDecor: { color: COLORS.accent, fontSize: 24, letterSpacing: 8 },
   headline: {
     color: COLORS.text,
     fontSize: 24,
