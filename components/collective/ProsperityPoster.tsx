@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { CollectiveConstruction } from './CollectiveConstruction';
 import { COLORS } from '../../constants/theme';
 import { prosperityStage, type WeekProgress } from '../../lib/prosperity';
 
@@ -7,8 +8,6 @@ interface Props {
   streak: number;
   week: WeekProgress;
 }
-
-const SEGMENTS = 10;
 
 function weeks(n: number): string {
   return `${n} ${n === 1 ? 'WEEK' : 'WEEKS'}`;
@@ -33,13 +32,14 @@ function weekLine(week: WeekProgress): string {
  */
 export function ProsperityPoster({ streak, week }: Props) {
   const stage = prosperityStage(streak);
-  const filled = Math.floor(stage.progress * SEGMENTS);
   const danger = week.overdue > 0;
 
   return (
     <View
       style={styles.card}
-      accessibilityLabel={`Collective prosperity: ${streak} ${streak === 1 ? 'week' : 'weeks'} of unbroken prosperity`}
+      accessibilityLabel={`Collective prosperity: ${streak} ${streak === 1 ? 'week' : 'weeks'} of unbroken prosperity. ${
+        stage.next ? `Building towards ${stage.next.name}.` : 'Every stage of prosperity has been built.'
+      }`}
     >
       <Text style={styles.label}>PROSPERITY OF THE COLLECTIVE</Text>
 
@@ -50,26 +50,24 @@ export function ProsperityPoster({ streak, week }: Props) {
 
       {stage.current ? <Text style={styles.stage}>{stage.current.name.toUpperCase()}</Text> : null}
 
-      {/* A bar towards the next stage only means something once there is a run
-          to measure; at zero it was ten empty boxes of furniture. */}
-      {streak > 0 && stage.next ? (
-        <>
-          <View style={styles.bar}>
-            {Array.from({ length: SEGMENTS }, (_, i) => (
-              <View key={i} style={styles.segment}>
-                {i < filled ? <View style={styles.segmentFill} /> : null}
-              </View>
-            ))}
-          </View>
-          <Text style={styles.next}>
-            NEXT: {stage.next.name.toUpperCase()} IN {weeks(stage.weeksToNext ?? 0)}
-          </Text>
-        </>
-      ) : null}
+      {/* The skyline itself carries the progress — what's standing is the streak
+          made visible, and the scaffold mid-frame is how close the next stage is.
+          A missed week sends the whole thing back to bare ground (decision 47:
+          the streak resets wholesale, not one building at a time), which the
+          illustration shows on its own with no separate "0" state needed. */}
+      <View style={styles.construction}>
+        <CollectiveConstruction streak={streak} />
+      </View>
 
-      {streak === 0 ? (
-        <Text style={styles.next}>COMPLETE EVERY DUTY THIS WEEK TO BEGIN THE HARVEST.</Text>
-      ) : null}
+      {stage.next ? (
+        <Text style={styles.next}>
+          {streak === 0
+            ? 'GROUND HAS BEEN BROKEN. COMPLETE EVERY DUTY THIS WEEK TO RAISE THE FIRST HARVEST.'
+            : `NEXT: ${stage.next.name.toUpperCase()} IN ${weeks(stage.weeksToNext ?? 0)}`}
+        </Text>
+      ) : (
+        <Text style={styles.next}>THE GOLDEN AGE STANDS COMPLETE.</Text>
+      )}
 
       <View style={styles.rule} />
       <Text style={[styles.weekLine, danger && styles.weekLineDanger]}>{weekLine(week)}</Text>
@@ -117,15 +115,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 12,
   },
-  bar: { flexDirection: 'row', gap: 2, height: 16, marginTop: 12 },
-  segment: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    borderWidth: 1,
-    borderColor: COLORS.muted,
-    overflow: 'hidden',
+  construction: {
+    width: '100%',
+    height: 130,
+    marginTop: 14,
   },
-  segmentFill: { height: '100%', backgroundColor: COLORS.primary },
   next: {
     color: COLORS.muted,
     fontSize: 11,
