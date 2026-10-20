@@ -203,9 +203,13 @@ export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
         <Text style={styles.dueChipText}>{isOverdue ? 'LATE' : dueLabel}</Text>
       ) : null}
 
-      <View style={[styles.avatar, { backgroundColor: color }]}>
-        <Ionicons name="person" size={16} color="#FFFFFF" />
-      </View>
+      {/* Your own list is all you, so the avatar says nothing there. It earns its
+          place on the Comrades' list, where it shows whose duty it is. */}
+      {readOnly ? (
+        <View style={[styles.avatar, { backgroundColor: color }]}>
+          <Ionicons name="person" size={16} color="#FFFFFF" />
+        </View>
+      ) : null}
 
       <View style={styles.stampWrap}>
         {isDone ? (
