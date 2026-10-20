@@ -56,7 +56,12 @@ export function ScoreboardPanel() {
     setWeeklyDeltas(Object.values(deltaMap));
   }
 
-  const totalWeekly = weeklyDeltas.reduce((sum, d) => sum + d.delta, 0);
+  // Denouncement credits move between comrades but don't count towards the quota.
+  const totalWeekly = weeklyDeltas.reduce(
+    (sum, d) =>
+      sum + d.items.filter((i) => !i.reason.startsWith('denouncement')).reduce((s, i) => s + i.delta, 0),
+    0,
+  );
   const quotaPercent = Math.min(100, Math.round((totalWeekly / CONFIG.WEEKLY_CREDIT_POOL) * 100));
 
   const activeMembers = members.filter((m) => m.status === 'active');
