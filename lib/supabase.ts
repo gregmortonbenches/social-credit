@@ -8,9 +8,10 @@ const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
+    // On web the client falls back to localStorage, so a refresh keeps you in.
     storage: Platform.OS === 'web' ? undefined : AsyncStorage,
     autoRefreshToken: true,
-    persistSession: Platform.OS !== 'web',
+    persistSession: true,
     detectSessionInUrl: false,
     // OAuth returns an authorisation code that lib/oauth.ts exchanges by hand
     // after the auth browser closes. PKCE is what makes that exchange safe on a

@@ -1,7 +1,9 @@
 import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
-Notifications.setNotificationHandler({
+// Native push only. A browser has no device push token; web push is separate work.
+if (Platform.OS !== 'web') Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
@@ -12,6 +14,7 @@ Notifications.setNotificationHandler({
 });
 
 export async function registerForPushNotifications(userId: string): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 

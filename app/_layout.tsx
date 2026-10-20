@@ -3,6 +3,7 @@ import { useFonts } from 'expo-font';
 import { router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 import 'react-native-reanimated';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
 import { registerForPushNotifications } from '../lib/notifications';
@@ -62,10 +63,21 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0EAD6' } }}>
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false }} />
-      <Stack.Screen name="(app)" options={{ gestureEnabled: false }} />
-    </Stack>
+    <View style={styles.page}>
+      <View style={styles.column}>
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0EAD6' } }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false }} />
+          <Stack.Screen name="(app)" options={{ gestureEnabled: false }} />
+        </Stack>
+      </View>
+    </View>
   );
 }
+
+// The screens are designed for a phone. In a browser, keep them a poster-width
+// column in the middle of the page rather than stretching across the monitor.
+const styles = StyleSheet.create({
+  page: { flex: 1, backgroundColor: '#F0EAD6', alignItems: 'center' },
+  column: { flex: 1, width: '100%', maxWidth: Platform.OS === 'web' ? 520 : undefined },
+});
