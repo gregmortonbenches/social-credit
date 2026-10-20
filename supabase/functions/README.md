@@ -24,7 +24,12 @@ Any user could extract it and invoke these endpoints directly.
 
 All four therefore call `rejectNonCronCaller()` from `_shared/cron-auth.ts`,
 which requires the service role key explicitly — the same guard
-`send-notification` already used.
+`send-notification` already used. It accepts either an exact match with
+`SUPABASE_SERVICE_ROLE_KEY` or a JWT whose `role` claim is `service_role`: the
+vault stores the legacy JWT form while the runtime key can be the newer
+`sb_secret_…` form, and an exact match alone answered every cron call with 401.
+Reading the claim is only safe while `verify_jwt` stays ON — **never deploy these
+with `--no-verify-jwt`.**
 
 **Because of this, the scheduler must send the service role key:**
 

@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { fromZonedTime, toZonedTime } from 'https://esm.sh/date-fns-tz@3';
 import { weekStartKey } from '../_shared/prosperity.ts';
+import { isServiceRoleCaller } from '../_shared/cron-auth.ts';
 import { withCors } from '../_shared/cors.ts';
 
 const supabase = createClient(
@@ -45,7 +46,7 @@ Deno.serve(withCors(async (req) => {
     // admin may force a single Collective they belong to (the dev button in
     // Settings), because the app can never hold the service role key.
     let toProcess: DraftState[];
-    if (req.headers.get('Authorization') === `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`) {
+    if (isServiceRoleCaller(req)) {
       toProcess = await dueDraftStates();
     } else {
       const forced = await forceForAdmin(req, body);
