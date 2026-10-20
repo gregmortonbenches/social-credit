@@ -330,7 +330,7 @@ export default function SettingsScreen() {
 
       {profile?.is_admin && <AdminSection />}
 
-      {__DEV__ && collective && profile && (
+      {(__DEV__ || profile?.is_admin) && collective && profile && (
         <DevSection
           collectiveId={collective.id}
           onAssigned={() => fetchAssignments(collective.id, profile.id, collective.timezone)}

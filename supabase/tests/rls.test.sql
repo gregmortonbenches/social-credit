@@ -577,4 +577,15 @@ SELECT assert(
   'an archived task can be added again');
 
 \echo ''
+\echo '--- service_role can use the tables (022) ---'
+SELECT assert(
+  (SELECT bool_and(has_table_privilege('service_role', c.oid, 'SELECT,INSERT,UPDATE,DELETE'))
+   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+   WHERE n.nspname = 'public' AND c.relkind = 'r'),
+  'service_role has full DML on every public table');
+SELECT assert(
+  NOT has_table_privilege('anon', 'public.profiles', 'SELECT'),
+  'anon still has no access to profiles');
+
+\echo ''
 \echo 'ALL RLS ASSERTIONS PASSED'

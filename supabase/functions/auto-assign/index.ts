@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { fromZonedTime, toZonedTime } from 'https://esm.sh/date-fns-tz@3';
 import { weekStartKey } from '../_shared/prosperity.ts';
+import { withCors } from '../_shared/cors.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -35,7 +36,7 @@ function errorMessage(err: unknown): string {
   return JSON.stringify(err);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const body = await req.json().catch(() => ({}));
 
   try {
@@ -71,7 +72,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     return json({ error: errorMessage(err) }, 500);
   }
-});
+}));
 
 /** Pending Collectives whose local time is Sunday, at or past the assignment hour. */
 async function dueDraftStates(): Promise<DraftState[]> {
