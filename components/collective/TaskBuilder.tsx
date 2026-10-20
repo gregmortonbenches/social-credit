@@ -77,7 +77,7 @@ export function TaskBuilder({ tasks, onAdd, onRemove }: Props) {
         value={space}
         onChangeText={(v) => { setSpace(v); setError(''); }}
         maxLength={SPACE_MAX_CHARS}
-        placeholder="e.g. Kitchen, Back garden, Hannah's room"
+        placeholder="e.g. Kitchen or Back garden"
         returnKeyType="done"
         onSubmitEditing={handleAdd}
       />

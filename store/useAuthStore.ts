@@ -76,13 +76,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     if (!authListenerRegistered) {
       authListenerRegistered = true;
-      supabase.auth.onAuthStateChange(async (_event, session) => {
-        if (session) {
-          const profile = await fetchOrCreateProfile(session);
-          set({ session, profile });
-        } else {
-          set({ session: null, profile: null });
-        }
+      // Do not await a Supabase call inside this callback. supabase-js fires it
+      // while holding its auth lock (INITIAL_SESSION, on a page reload with a
+      // stored session) and getSession()/queries wait on that same lock, so the
+      // app hung on the loading screen. Deferring lets the lock release first.
+      supabase.auth.onAuthStateChange((_event, session) => {
+        setTimeout(async () => {
+          if (session) {
+            const profile = await fetchOrCreateProfile(session);
+            set({ session, profile });
+          } else {
+            set({ session: null, profile: null });
+          }
+        }, 0);
       });
     }
 
