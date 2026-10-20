@@ -12,7 +12,9 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     storage: Platform.OS === 'web' ? undefined : AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    // Web returns from Google to this page with ?code=…; the client exchanges it.
+    // Native does the exchange by hand in lib/oauth.ts.
+    detectSessionInUrl: Platform.OS === 'web',
     // OAuth returns an authorisation code that lib/oauth.ts exchanges by hand
     // after the auth browser closes. PKCE is what makes that exchange safe on a
     // device that cannot keep a client secret.

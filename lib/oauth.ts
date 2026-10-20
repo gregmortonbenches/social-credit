@@ -32,6 +32,18 @@ export function authRedirectUrl(): string {
  * `skipBrowserRedirect` keeps the navigation ours to control.
  */
 export async function signInWithGoogle(): Promise<void> {
+  // Web: a full-page redirect to Google and back. A popup opened after an await
+  // is blocked by browsers. On return, supabase-js reads ?code= from the URL
+  // (detectSessionInUrl) and the auth listener signs the user in.
+  if (Platform.OS === 'web') {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) throw error;
+    return;
+  }
+
   const redirectTo = authRedirectUrl();
 
   const { data, error } = await supabase.auth.signInWithOAuth({
