@@ -1,15 +1,9 @@
 import { create } from 'zustand';
 import type { Denouncement } from '../lib/database.types';
-import {
-  buildDenounceMadePayload,
-  buildDenounceResolvedPayload,
-  buildVoteCastPayload,
-  checkAchievements,
-} from '../lib/achievements';
+import { announceAchievements } from '../lib/achievements';
 import { notifyCollective } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { useConnectionStore } from './useConnectionStore';
-import { useAchievementStore } from './useAchievementStore';
 
 interface DenouncementState {
   denouncements: Denouncement[];
@@ -54,10 +48,7 @@ export const useDenouncementStore = create<DenouncementState>((set, get) => ({
     notifyCollective({ event: 'denounced', denouncementId: data.id });
 
     // Check double_agents at creation time (outcome not yet known, purge_the_bourgeoisie fires at resolution)
-    buildDenounceMadePayload(accuserId, collectiveId, accusedId, null)
-      .then((payload) => checkAchievements(accuserId, collectiveId, { type: 'denounce_made', payload }))
-      .then((unlocked) => { if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked); })
-      .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
+    announceAchievements({ type: 'denounce_made', collectiveId, denouncementId: data.id });
   },
 
   withdrawDenouncement: async (denouncementId) => {
@@ -96,10 +87,7 @@ export const useDenouncementStore = create<DenouncementState>((set, get) => ({
 
     const denouncement = get().denouncements.find((d) => d.id === denouncementId);
     if (denouncement) {
-      buildVoteCastPayload(voterId, denouncement.collective_id, denouncementId)
-        .then((payload) => checkAchievements(voterId, denouncement.collective_id, { type: 'vote_cast', payload }))
-        .then((unlocked) => { if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked); })
-        .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
+      announceAchievements({ type: 'vote_cast', collectiveId: denouncement.collective_id, denouncementId });
     }
   },
 
@@ -125,23 +113,9 @@ export const useDenouncementStore = create<DenouncementState>((set, get) => ({
           if (!justResolved) return;
           if (next.accuser_id !== userId && next.accused_id !== userId) return;
 
-          const d = {
-            accuser_id: next.accuser_id,
-            accused_id: next.accused_id,
-            outcome: next.outcome,
-            explanation: next.explanation,
-          };
-
-          buildDenounceResolvedPayload(userId, collectiveId, next.id, d)
-            .then((payload) => checkAchievements(userId, collectiveId, { type: 'denounce_resolved', payload }))
-            .then((unlocked) => { if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked); })
-            .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
-
+          announceAchievements({ type: 'denounce_resolved', collectiveId, denouncementId: next.id });
           if (next.accuser_id === userId) {
-            buildDenounceMadePayload(userId, collectiveId, next.accused_id, next.outcome)
-              .then((payload) => checkAchievements(userId, collectiveId, { type: 'denounce_made', payload }))
-              .then((unlocked) => { if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked); })
-              .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
+            announceAchievements({ type: 'denounce_made', collectiveId, denouncementId: next.id });
           }
         }
       )

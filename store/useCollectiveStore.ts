@@ -1,10 +1,9 @@
 import { create } from 'zustand';
 import type { Collective, CollectiveMember, CollectiveSummary, TaskPreference } from '../lib/database.types';
-import { buildMemberJoinedPayload, checkAchievements } from '../lib/achievements';
+import { announceAchievements } from '../lib/achievements';
 import { notifyCollective } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { useConnectionStore } from './useConnectionStore';
-import { useAchievementStore } from './useAchievementStore';
 
 interface CollectiveState {
   collective: Collective | null;
@@ -96,7 +95,7 @@ export const useCollectiveStore = create<CollectiveState>((set, get) => ({
   // pending using the COLLECTIVE's timezone — the old client-side
   // `now.getDay() === 1` used the device timezone, which contradicts the
   // collective-timezone rule in CLAUDE.md.
-  joinCollective: async (code, userId) => {
+  joinCollective: async (code, _userId) => {
     const { data: collective, error } = await supabase.rpc('join_collective_by_code', {
       p_code: code,
     });
@@ -109,10 +108,7 @@ export const useCollectiveStore = create<CollectiveState>((set, get) => ({
 
     notifyCollective({ event: 'joined', collectiveId });
 
-    buildMemberJoinedPayload(userId, collectiveId)
-      .then((payload) => checkAchievements(userId, collectiveId, { type: 'member_joined', payload }))
-      .then((unlocked) => { if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked); })
-      .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
+    announceAchievements({ type: 'member_joined', collectiveId });
   },
 
   leaveCollective: async (collectiveId, _userId) => {
@@ -194,10 +190,7 @@ export const useCollectiveStore = create<CollectiveState>((set, get) => ({
           if (userId && realtimePayload.eventType === 'INSERT') {
             const newMember = realtimePayload.new as Record<string, any>;
             if (newMember.status === 'active' && newMember.user_id !== userId) {
-              buildMemberJoinedPayload(userId, collectiveId)
-                .then((payload) => checkAchievements(userId, collectiveId, { type: 'member_joined', payload }))
-                .then((unlocked) => { if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked); })
-                .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
+              announceAchievements({ type: 'member_joined', collectiveId });
             }
           }
         }

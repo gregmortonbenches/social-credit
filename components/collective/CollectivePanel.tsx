@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Modal, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { CONFIG } from '../../constants/config';
 import { COLORS } from '../../constants/theme';
 import type { MemberProfile, WeeklyAssignment } from '../../lib/database.types';
@@ -195,7 +195,7 @@ export function CollectivePanel() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.bannerText} adjustsFontSizeToFit numberOfLines={1} minimumFontScale={0.6}>
+      <Text style={styles.bannerText} adjustsFontSizeToFit numberOfLines={Platform.OS === 'web' ? 2 : 1} minimumFontScale={0.6}>
         {collective ? collective.display_name.toUpperCase() : 'THE COLLECTIVE'}
       </Text>
       <View style={styles.titleRule} />

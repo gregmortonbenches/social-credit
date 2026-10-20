@@ -2,10 +2,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useRef, useState, type ComponentType } from 'react';
 import {
-  Dimensions,
   FlatList,
+  Platform,
   StyleSheet,
   Text,
+  TouchableOpacity,
+  useWindowDimensions,
   View,
   type ListRenderItemInfo,
 } from 'react-native';
@@ -14,10 +16,9 @@ import {
   PenaltyIllustration,
   WelcomeIllustration,
 } from '../../components/onboarding/OnboardingIllustration';
-import { COLORS } from '../../constants/theme';
+import { PropagandaButton } from '../../components/ui/PropagandaButton';
+import { COLORS, WEB_MAX_WIDTH } from '../../constants/theme';
 import { useAuthStore } from '../../store/useAuthStore';
-
-const { width } = Dimensions.get('window');
 
 interface Slide {
   key: string;
@@ -53,30 +54,46 @@ const VISIBLE_SLIDES = SLIDES.filter((s) => !s.ghost);
 
 export default function OnboardingScreen() {
   const { profile } = useAuthStore();
+  // The slides page by this width, so on web it must be the app column's, not the
+  // window's. (It was read once at module load, which was also stale after a rotate.)
+  const { width: windowWidth } = useWindowDimensions();
+  const width = Platform.OS === 'web' ? Math.min(windowWidth, WEB_MAX_WIDTH) : windowWidth;
+  const finishing = useRef(false);
   const username = profile?.username ?? 'Comrade';
   const [index, setIndex] = useState(0);
+  const isLast = index >= VISIBLE_SLIDES.length - 1;
   const listRef = useRef<FlatList>(null);
 
   async function markOnboarded() {
+    // Reaching the hidden last slide and tapping Begin could both land here.
+    if (finishing.current) return;
+    finishing.current = true;
     if (profile?.id) {
       await AsyncStorage.setItem(`onboarded_${profile.id}`, 'true');
     }
     router.replace('/(app)');
   }
 
-  function onViewableItemsChanged({ viewableItems }: any) {
+  // FlatList throws ("Changing onViewableItemsChanged on the fly is not supported")
+  // if this callback's identity changes, and a function declared in the component
+  // is new on every render, which setIndex below causes. Keep one for the life of
+  // the screen and reach the current handlers through a ref. That crash is what
+  // left people stuck on the intro slides after the first swipe.
+  const markOnboardedRef = useRef(markOnboarded);
+  markOnboardedRef.current = markOnboarded;
+  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
       const newIndex = viewableItems[0].index ?? 0;
       setIndex(newIndex);
-      if (SLIDES[newIndex]?.ghost) markOnboarded();
+      if (SLIDES[newIndex]?.ghost) markOnboardedRef.current();
     }
-  }
+  }).current;
 
   function renderSlide({ item }: ListRenderItemInfo<Slide>) {
-    if (item.ghost) return <View style={styles.slide} />;
+    if (item.ghost) return <View style={[styles.slide, { width }]} />;
     const Illustration = item.illustration;
     return (
-      <View style={styles.slide}>
+      <View style={[styles.slide, { width }]}>
         <View style={styles.posterBanner}>
           {Illustration ? <Illustration /> : null}
         </View>
@@ -93,6 +110,7 @@ export default function OnboardingScreen() {
         data={SLIDES}
         renderItem={renderSlide}
         keyExtractor={(s) => s.key}
+        getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
@@ -106,6 +124,21 @@ export default function OnboardingScreen() {
             <View key={i} style={[styles.dot, i === index && styles.dotActive]} />
           ))}
         </View>
+
+        {/* Swiping to the hidden last slide used to be the only way out, which is
+            easy to miss (and flaky) with a finger on a mobile browser. */}
+        <PropagandaButton
+          title={isLast ? 'Begin' : 'Next'}
+          onPress={() =>
+            isLast ? markOnboarded() : listRef.current?.scrollToIndex({ index: index + 1, animated: true })
+          }
+          style={styles.cta}
+        />
+        {!isLast ? (
+          <TouchableOpacity onPress={markOnboarded} accessibilityRole="button" accessibilityLabel="Skip the introduction">
+            <Text style={styles.skip}>Skip</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
@@ -114,7 +147,6 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   slide: {
-    width,
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -152,6 +184,8 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   dots: { flexDirection: 'row', gap: 8 },
+  cta: { alignSelf: 'stretch' },
+  skip: { color: COLORS.muted, fontSize: 13, textDecorationLine: 'underline' },
   dot: {
     width: 8,
     height: 8,

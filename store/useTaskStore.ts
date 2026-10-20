@@ -1,11 +1,10 @@
 import { create } from 'zustand';
 import type { WeeklyAssignment } from '../lib/database.types';
-import { buildTaskCompletePayload, checkAchievements } from '../lib/achievements';
+import { announceAchievements } from '../lib/achievements';
 import { awardTaskCredits } from '../lib/credits';
 import { collectiveWeekStart } from '../lib/draft';
 import { supabase } from '../lib/supabase';
 import { useConnectionStore } from './useConnectionStore';
-import { useAchievementStore } from './useAchievementStore';
 
 interface TaskState {
   myAssignments: WeeklyAssignment[];
@@ -88,33 +87,29 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     // idempotent and weekly-reset runs the same dedup check, so weekly-reset
     // remains a genuine fallback if this call fails (offline, say) rather than
     // the only path it used to be.
-    if (assignment?.credits_value) {
-      awardTaskCredits(assignmentId)
-        // The award is applied to profiles.total_credits server-side, so the
-        // cached profile is stale until re-read. Without this the "+83" floats
-        // up from the card and lands nowhere.
-        .then(() => {
-          const { useAuthStore } = require('./useAuthStore');
-          return useAuthStore.getState().refreshProfile();
-        })
-        .catch((err: any) => {
-          if (__DEV__) console.warn('[tasks] immediate credit award failed:', err?.message ?? err);
-        });
-    }
-
-    // Achievement check (fire-and-forget)
-    if (assignment) {
-      buildTaskCompletePayload(assignment.user_id, assignment.collective_id, assignment)
-        .then((payload) =>
-          checkAchievements(assignment.user_id, assignment.collective_id, {
-            type: 'task_complete',
-            payload,
+    const settled: Promise<unknown> = assignment?.credits_value
+      ? awardTaskCredits(assignmentId)
+          // The award is applied to profiles.total_credits server-side, so the
+          // cached profile is stale until re-read. Without this the "+83" floats
+          // up from the card and lands nowhere.
+          .then(() => {
+            const { useAuthStore } = require('./useAuthStore');
+            return useAuthStore.getState().refreshProfile();
           })
-        )
-        .then((unlocked) => {
-          if (unlocked.length > 0) useAchievementStore.getState().pushUnlocks(unlocked);
+          .catch((err: any) => {
+            if (__DEV__) console.warn('[tasks] immediate credit award failed:', err?.message ?? err);
+          })
+      : Promise.resolve();
+
+    // Achievements read the credit ledger (top scorer), so wait for the award.
+    if (assignment) {
+      settled.then(() =>
+        announceAchievements({
+          type: 'task_complete',
+          collectiveId: assignment.collective_id,
+          assignmentId,
         })
-        .catch((err) => { if (__DEV__) console.warn('[achievements] check failed:', err?.message ?? err); });
+      );
     }
   },
 

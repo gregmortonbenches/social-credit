@@ -29,6 +29,8 @@ export default function HomeScreen() {
   const listRef = useRef<FlatList>(null);
   const [collectiveLoaded, setCollectiveLoaded] = useState(false);
   const [showPrefsModal, setShowPrefsModal] = useState(false);
+  // Web only: see the pager below.
+  const [listHeight, setListHeight] = useState(0);
   const isOnline = useConnectionStore((s) => s.isOnline);
   const startWatching = useConnectionStore((s) => s.startWatching);
 
@@ -106,6 +108,12 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ConnectionBanner />
+      {/* On web a horizontal list does not give its items a height, so each panel's
+          ScrollView grew to fit its content and the page just clipped it: nothing
+          scrolled and the bottom of every panel was unreachable. Measure the area
+          and hand the panels that height. Native lays them out correctly already. */}
+      <View style={{ flex: 1 }} onLayout={(e) => setListHeight(e.nativeEvent.layout.height)}>
+      {Platform.OS !== 'web' || listHeight > 0 ? (
       <FlatList
         ref={listRef}
         data={PANELS}
@@ -117,7 +125,7 @@ export default function HomeScreen() {
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
         renderItem={({ index }) => (
-          <View style={{ width }}>
+          <View style={Platform.OS === 'web' ? { width, height: listHeight } : { width }}>
             {index === 0 && <CollectivePanel />}
             {index === 1 && <TasksPanel />}
             {index === 2 && <ScoreboardPanel />}
@@ -125,6 +133,8 @@ export default function HomeScreen() {
         )}
         keyExtractor={(_, i) => String(i)}
       />
+      ) : null}
+      </View>
 
       {/* These dots are the only way to navigate between panels (decision 17), so
           they need a real tap target and a name. The dot itself stays 10px; the

@@ -588,4 +588,15 @@ SELECT assert(
   'anon still has no access to profiles');
 
 \echo ''
+\echo '--- achievements are awarded by the server only (005) ---'
+SELECT assert(
+  refused_as('00000000-0000-0000-0000-0000000000a1',
+    'INSERT INTO achievements (user_id, achievement_key) VALUES (''00000000-0000-0000-0000-0000000000a1'', ''class_struggle'')'),
+  'a member cannot award themselves an achievement');
+SELECT assert(
+  refused_as('00000000-0000-0000-0000-0000000000a1',
+    'UPDATE achievements SET achievement_key = ''class_struggle'''),
+  'a member cannot edit achievements');
+
+\echo ''
 \echo 'ALL RLS ASSERTIONS PASSED'
