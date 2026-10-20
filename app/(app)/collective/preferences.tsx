@@ -132,7 +132,9 @@ export default function PreferencesScreen() {
       supabase
         .from('task_library')
         .select('id, name')
-        .or(`is_custom.eq.false,created_by_collective_id.eq.${collective.id}`)
+        .eq('is_custom', true)
+        .eq('created_by_collective_id', collective.id)
+        .eq('archived', false)
         .order('name'),
       loadPreferences(collective.id, profile.id),
     ]);

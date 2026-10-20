@@ -111,19 +111,23 @@ export interface Database {
           description: string | null;
           is_custom: boolean;
           created_by_collective_id: string | null;
+          action: string | null;
+          space: string | null;
+          archived: boolean;
         };
+        // name and room_type are composed by a trigger (migration 021).
         Insert: {
           id?: string;
-          name: string;
-          room_type: string;
-          description?: string | null;
-          is_custom?: boolean;
-          created_by_collective_id?: string | null;
-        };
-        Update: {
           name?: string;
           room_type?: string;
           description?: string | null;
+          is_custom?: boolean;
+          created_by_collective_id?: string | null;
+          action?: string | null;
+          space?: string | null;
+        };
+        Update: {
+          archived?: boolean;
         };
         Relationships: [];
       };

@@ -243,7 +243,7 @@ export async function buildTaskCompletePayload(
     supabase.from('weekly_assignments').select('week_start, status, task_id').eq('user_id', userId).eq('collective_id', collectiveId),
     supabase.from('weekly_assignments').select('user_id, status, credits_value').eq('collective_id', collectiveId).eq('week_start', assignment.week_start),
     supabase.from('weekly_assignments').select('id', { count: 'exact', head: true }).eq('collective_id', collectiveId).eq('status', 'complete'),
-    supabase.from('collectives').select('rooms, timezone').eq('id', collectiveId).single(),
+    supabase.from('collectives').select('timezone').eq('id', collectiveId).single(),
     supabase.from('collective_members').select('user_id').eq('collective_id', collectiveId).eq('status', 'active'),
     supabase.from('denouncements').select('created_at').eq('accused_id', userId).eq('collective_id', collectiveId),
     supabase.from('credit_ledger').select('user_id, delta, created_at').eq('collective_id', collectiveId).like('reason', 'task_complete%').gt('delta', 0).gte('created_at', fourWeeksAgo.toISOString()),
@@ -254,9 +254,6 @@ export async function buildTaskCompletePayload(
   const userAssignments = userAssignmentsResult.data ?? [];
   const weekAssignments = weekAssignmentsResult.data ?? [];
   const collectiveTotalCompleted = collectiveCompletedCountResult.count ?? 0;
-  const collectiveRooms = Array.isArray(collectiveResult.data?.rooms)
-    ? (collectiveResult.data!.rooms as string[])
-    : [];
   // Week keys below are compared against `weekly_assignments.week_start`, which
   // the Edge Functions write as a Monday in the COLLECTIVE's timezone. Deriving
   // them from the device clock produced keys that simply never matched: the old
@@ -301,6 +298,15 @@ export async function buildTaskCompletePayload(
   const kitchenCount = roomTypeCounts['kitchen'] ?? 0;
   const roomTypeCount = roomType ? (roomTypeCounts[roomType] ?? 0) : 0;
   const coveredRoomTypes = new Set(Object.keys(roomTypeCounts));
+  // Spaces are whatever the household typed, so "every room" means every space
+  // among the collective's current tasks.
+  const { data: liveTasks } = await supabase
+    .from('task_library')
+    .select('room_type')
+    .eq('is_custom', true)
+    .eq('created_by_collective_id', collectiveId)
+    .eq('archived', false);
+  const collectiveRooms = [...new Set((liveTasks ?? []).map((t) => t.room_type))];
   const allRoomTypesCovered =
     collectiveRooms.length > 0 && collectiveRooms.every((rt) => coveredRoomTypes.has(rt));
 

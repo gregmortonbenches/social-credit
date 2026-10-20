@@ -299,9 +299,9 @@ export function CollectivePanel() {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.manageBtn}
-          onPress={() => router.push('/(app)/collective/edit-rooms')}
+          onPress={() => router.push('/(app)/collective/edit-tasks')}
         >
-          <Text style={styles.manageBtnText}>EDIT ROOMS</Text>
+          <Text style={styles.manageBtnText}>EDIT DUTIES</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.manageBtn} onPress={() => router.push('/(app)/settings')}>
           <Text style={styles.manageBtnText}>SETTINGS</Text>

@@ -1,55 +1,29 @@
-export interface DefaultTask {
-  name: string;
-  room_type: string;
-}
-
-export const DEFAULT_TASKS: DefaultTask[] = [
-  { name: 'Take out the bins', room_type: 'hallway' },
-  { name: 'Clean the bathroom', room_type: 'bathroom' },
-  { name: 'Washing up', room_type: 'kitchen' },
-  { name: 'Hoover and mop', room_type: 'living_room' },
-  { name: 'General clean', room_type: 'living_room' },
-  { name: 'Clean the kitchen', room_type: 'kitchen' },
-  { name: 'Clean the bedroom', room_type: 'bedroom' },
-  { name: 'Clean living room', room_type: 'living_room' },
-  { name: 'Clean the hallway', room_type: 'hallway' },
-  { name: 'Clean dining room', room_type: 'dining_room' },
-];
-
-// Draft icons — will be replaced with custom artwork later.
-const TASK_NAME_ICONS: Record<string, string> = {
-  'Take out the bins': 'trash-outline',
-  'Clean the bathroom': 'water-outline',
-  'Washing up': 'restaurant-outline',
-  'Hoover and mop': 'brush-outline',
-  'General clean': 'home-outline',
-  'Clean the kitchen': 'flame-outline',
-  'Clean the bedroom': 'bed-outline',
-  'Clean living room': 'tv-outline',
-  'Clean the hallway': 'footsteps-outline',
-  'Clean dining room': 'fast-food-outline',
-};
-
-const ROOM_TYPE_ICONS: Record<string, string> = {
-  kitchen: 'flame-outline',
-  bathroom: 'water-outline',
-  living_room: 'tv-outline',
-  dining_room: 'fast-food-outline',
-  bedroom: 'bed-outline',
-  hallway: 'footsteps-outline',
-};
-
-export function getTaskIcon(taskName: string, roomType?: string): string {
-  return TASK_NAME_ICONS[taskName] ?? (roomType ? ROOM_TYPE_ICONS[roomType] : undefined) ?? 'checkmark-circle-outline';
-}
-
-export const ROOM_TYPES = [
-  'kitchen',
-  'living_room',
-  'dining_room',
-  'bathroom',
-  'bedroom',
-  'hallway',
+// A task is an action from this fixed list plus a space the household types
+// themselves. The database composes the display name ("Mop: Kitchen") — see
+// migration 021 — so the list here and the CASE in task_library_compose() must
+// stay in step.
+export const TASK_ACTIONS = [
+  { key: 'clean', label: 'Clean', icon: 'sparkles-outline' },
+  { key: 'mop', label: 'Mop', icon: 'water-outline' },
+  { key: 'hoover', label: 'Hoover', icon: 'brush-outline' },
+  { key: 'wash_up', label: 'Wash up', icon: 'restaurant-outline' },
+  { key: 'tidy', label: 'Tidy', icon: 'home-outline' },
+  { key: 'bins', label: 'Bins', icon: 'trash-outline' },
 ] as const;
 
-export type RoomType = typeof ROOM_TYPES[number];
+export type TaskAction = (typeof TASK_ACTIONS)[number]['key'];
+
+export const SPACE_MAX_CHARS = 30;
+
+export function getActionLabel(action: string): string {
+  return TASK_ACTIONS.find((a) => a.key === action)?.label ?? action;
+}
+
+// Draft icons — will be replaced with custom artwork later.
+export function getTaskIcon(action?: string | null): string {
+  return TASK_ACTIONS.find((a) => a.key === action)?.icon ?? 'checkmark-circle-outline';
+}
+
+export function normaliseSpace(space: string): string {
+  return space.trim().replace(/\s+/g, ' ');
+}

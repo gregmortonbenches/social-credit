@@ -521,4 +521,60 @@ SELECT assert(
   'the founder cannot write reset_week');
 
 \echo ''
+\echo '--- task_library: collectives own their tasks (021) ---'
+SELECT assert(
+  NOT refused_as('00000000-0000-0000-0000-0000000000b2',
+    format('INSERT INTO task_library (action, space, is_custom, created_by_collective_id) VALUES (''mop'', ''  Back   garden '', true, %L)', :'alice_collective')),
+  'any member can add a task to their collective');
+SELECT assert(
+  (SELECT name = 'Mop: Back garden' AND room_type = 'back garden' AND space = 'Back garden'
+   FROM task_library WHERE action = 'mop' AND created_by_collective_id = :'alice_collective'),
+  'name, space and room_type are composed by the trigger, whitespace collapsed');
+SELECT assert(
+  refused_as('00000000-0000-0000-0000-0000000000a1',
+    format('INSERT INTO task_library (action, space, is_custom, created_by_collective_id) VALUES (''mop'', ''back GARDEN'', true, %L)', :'alice_collective')),
+  'the same action and space cannot be added twice');
+SELECT assert(
+  refused_as('00000000-0000-0000-0000-0000000000c3',
+    format('INSERT INTO task_library (action, space, is_custom, created_by_collective_id) VALUES (''clean'', ''Kitchen'', true, %L)', :'alice_collective')),
+  'an outsider cannot add a task to someone else''s collective');
+SELECT assert(
+  refused_as('00000000-0000-0000-0000-0000000000a1',
+    'INSERT INTO task_library (name, room_type) VALUES (''Free for all'', ''kitchen'')'),
+  'a member cannot add a shared default task');
+SELECT assert(
+  refused_as('00000000-0000-0000-0000-0000000000a1',
+    format('INSERT INTO task_library (action, space, is_custom, created_by_collective_id) VALUES (''dance'', ''Kitchen'', true, %L)', :'alice_collective')),
+  'an unknown action is refused');
+SELECT assert(
+  refused_as('00000000-0000-0000-0000-0000000000a1',
+    format('INSERT INTO task_library (action, space, is_custom, created_by_collective_id) VALUES (''clean'', %L, true, %L)', repeat('x', 31), :'alice_collective')),
+  'a space over 30 characters is refused');
+SELECT assert(
+  refused_as('00000000-0000-0000-0000-0000000000a1',
+    format('INSERT INTO task_library (action, space, is_custom, created_by_collective_id) VALUES (''clean'', ''   '', true, %L)', :'alice_collective')),
+  'a blank space is refused');
+-- RLS hides the rows from an outsider, so the UPDATE matches nothing rather than erroring.
+SELECT refused_as('00000000-0000-0000-0000-0000000000c3',
+  format('UPDATE task_library SET archived = true WHERE created_by_collective_id = %L', :'alice_collective'));
+SELECT assert(
+  (SELECT NOT archived FROM task_library WHERE action = 'mop' AND created_by_collective_id = :'alice_collective'),
+  'an outsider cannot archive another collective''s task');
+SELECT assert(
+  refused_as('00000000-0000-0000-0000-0000000000a1',
+    format('UPDATE task_library SET space = ''Hacked'' WHERE created_by_collective_id = %L', :'alice_collective')),
+  'a member can change nothing but archived');
+SELECT assert(
+  NOT refused_as('00000000-0000-0000-0000-0000000000b2',
+    format('UPDATE task_library SET archived = true WHERE created_by_collective_id = %L', :'alice_collective')),
+  'any member can archive their collective''s task');
+SELECT assert(
+  (SELECT archived FROM task_library WHERE action = 'mop' AND created_by_collective_id = :'alice_collective'),
+  'and the task is archived');
+SELECT assert(
+  NOT refused_as('00000000-0000-0000-0000-0000000000a1',
+    format('INSERT INTO task_library (action, space, is_custom, created_by_collective_id) VALUES (''mop'', ''Back garden'', true, %L)', :'alice_collective')),
+  'an archived task can be added again');
+
+\echo ''
 \echo 'ALL RLS ASSERTIONS PASSED'

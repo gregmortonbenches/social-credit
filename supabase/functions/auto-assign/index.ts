@@ -245,7 +245,9 @@ async function assignWeek(ds: DraftState): Promise<string[]> {
   const { data: allTasks, error: taskErr } = await supabase
     .from('task_library')
     .select('id, name')
-    .or(`is_custom.eq.false,created_by_collective_id.eq.${collectiveId}`);
+    .eq('is_custom', true)
+    .eq('created_by_collective_id', collectiveId)
+    .eq('archived', false);
   if (taskErr) throw new Error(`task_library: ${taskErr.message}`);
 
   // Tasks already handed out this week (a forced re-run keeps completed ones)

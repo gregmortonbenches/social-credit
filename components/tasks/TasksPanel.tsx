@@ -127,7 +127,7 @@ export function TasksPanel() {
       {overdue.length > 0 && (
         <Section title="OVERDUE TASKS" titleColor={COLORS.danger}>
           {overdue.map((a) => (
-            <TaskCard key={a.id} assignment={a} taskName={taskLibrary[a.task_id]?.name ?? '—'} iconName={getTaskIcon(taskLibrary[a.task_id]?.name ?? '', taskLibrary[a.task_id]?.room_type)} />
+            <TaskCard key={a.id} assignment={a} taskName={taskLibrary[a.task_id]?.name ?? '—'} iconName={getTaskIcon(taskLibrary[a.task_id]?.action)} />
           ))}
         </Section>
       )}
@@ -138,7 +138,7 @@ export function TasksPanel() {
             <Text style={styles.empty}>No tasks due today, Comrade.</Text>
           ) : (
             today.map((a) => (
-              <TaskCard key={a.id} assignment={a} taskName={taskLibrary[a.task_id]?.name ?? '—'} iconName={getTaskIcon(taskLibrary[a.task_id]?.name ?? '', taskLibrary[a.task_id]?.room_type)} />
+              <TaskCard key={a.id} assignment={a} taskName={taskLibrary[a.task_id]?.name ?? '—'} iconName={getTaskIcon(taskLibrary[a.task_id]?.action)} />
             ))
           )}
         </Section>
@@ -147,7 +147,7 @@ export function TasksPanel() {
       {upcoming.length > 0 && (
         <Section title="UPCOMING">
           {upcoming.map((a) => (
-            <TaskCard key={a.id} assignment={a} taskName={taskLibrary[a.task_id]?.name ?? '—'} iconName={getTaskIcon(taskLibrary[a.task_id]?.name ?? '', taskLibrary[a.task_id]?.room_type)} />
+            <TaskCard key={a.id} assignment={a} taskName={taskLibrary[a.task_id]?.name ?? '—'} iconName={getTaskIcon(taskLibrary[a.task_id]?.action)} />
           ))}
         </Section>
       )}
@@ -156,7 +156,7 @@ export function TasksPanel() {
       {completed.length > 0 && (
         <Section title="COMPLETED THIS WEEK" collapsible>
           {completed.map((a) => (
-            <TaskCard key={a.id} assignment={a} taskName={taskLibrary[a.task_id]?.name ?? '—'} iconName={getTaskIcon(taskLibrary[a.task_id]?.name ?? '', taskLibrary[a.task_id]?.room_type)} />
+            <TaskCard key={a.id} assignment={a} taskName={taskLibrary[a.task_id]?.name ?? '—'} iconName={getTaskIcon(taskLibrary[a.task_id]?.action)} />
           ))}
         </Section>
       )}
@@ -167,7 +167,7 @@ export function TasksPanel() {
             key={a.id}
             assignment={a}
             taskName={taskLibrary[a.task_id]?.name ?? '—'}
-            iconName={getTaskIcon(taskLibrary[a.task_id]?.name ?? '', taskLibrary[a.task_id]?.room_type)}
+            iconName={getTaskIcon(taskLibrary[a.task_id]?.action)}
             readOnly
           />
         ))}
