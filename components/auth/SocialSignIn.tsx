@@ -1,6 +1,6 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { isAppleSignInAvailable, signInWithApple, signInWithGoogle } from '../../lib/oauth';
 
@@ -35,6 +35,10 @@ export function SocialSignIn({ onError }: { onError: (message: string) => void }
       setBusy(null);
     }
   }
+
+  // Not offered in a browser yet: Google needs a full-page redirect flow there
+  // (the popup is blocked after the await) and the provider is not configured.
+  if (Platform.OS === 'web') return null;
 
   return (
     <View style={styles.wrap}>
