@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
   getActionLabel,
@@ -30,6 +30,9 @@ export function TaskBuilder({ tasks, onAdd, onRemove }: Props) {
   const [space, setSpace] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  // A stale "already exists" must not outlive the list it was about.
+  useEffect(() => { setError(''); }, [tasks.length]);
 
   const cleaned = normaliseSpace(space);
   const duplicate = tasks.some(

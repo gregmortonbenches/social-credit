@@ -61,3 +61,7 @@ export const BORDER_RADIUS = {
   md: 8,
   lg: 16,
 } as const;
+
+// Width of the app column in a browser. Anything paged by window width (the home
+// pager) must use min(window, this), or its panels overflow the column.
+export const WEB_MAX_WIDTH = 520;

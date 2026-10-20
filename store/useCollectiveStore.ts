@@ -12,6 +12,9 @@ interface CollectiveState {
   taskPreferences: TaskPreference[];
   isLoading: boolean;
   fetchCollective: (collectiveId: string) => Promise<void>;
+  /** Finds the user's collective and loads it. Done by the (app) layout so a page
+   *  refreshed on its own URL (web) has its collective, not only the home screen. */
+  loadUserCollective: (userId: string) => Promise<void>;
   createCollective: (name: string, timezone: string, rooms: Record<string, number>, creatorId: string) => Promise<string>;
   lookupCollective: (code: string) => Promise<CollectiveSummary>;
   joinCollective: (code: string, userId: string) => Promise<void>;
@@ -36,6 +39,19 @@ export const useCollectiveStore = create<CollectiveState>((set, get) => ({
       supabase.from('collective_members').select('*').eq('collective_id', collectiveId),
     ]);
     set({ collective: collective ?? null, members: members ?? [], isLoading: false });
+  },
+
+  loadUserCollective: async (userId) => {
+    const { data: rows, error } = await supabase
+      .from('collective_members')
+      .select('collective_id')
+      .eq('user_id', userId)
+      .in('status', ['active', 'paused', 'pending'])
+      .order('joined_at', { ascending: false })
+      .limit(1);
+    if (error && __DEV__) console.warn('[collective] membership lookup failed:', error.message);
+    const id = rows?.[0]?.collective_id;
+    if (id) await get().fetchCollective(id);
   },
 
   // Code generation, the collective row and the creator's membership row are all

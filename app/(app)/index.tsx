@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, Modal, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { FlatList, Modal, Platform, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AchievementUnlockOverlay } from '../../components/achievements/AchievementUnlockOverlay';
 import { CollectivePanel } from '../../components/collective/CollectivePanel';
@@ -9,7 +9,7 @@ import { ScoreboardPanel } from '../../components/collective/ScoreboardPanel';
 import { TasksPanel } from '../../components/tasks/TasksPanel';
 import { ConnectionBanner } from '../../components/ui/ConnectionBanner';
 import { LoadingScreen } from '../../components/ui/LoadingScreen';
-import { COLORS } from '../../constants/theme';
+import { COLORS, WEB_MAX_WIDTH } from '../../constants/theme';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCollectiveStore } from '../../store/useCollectiveStore';
 import { useConnectionStore } from '../../store/useConnectionStore';
@@ -22,7 +22,8 @@ export default function HomeScreen() {
   const { profile, isLoading: authLoading } = useAuthStore();
   const { collective, fetchCollective, subscribeToMembers, loadPreferences } = useCollectiveStore();
   const { fetchAssignments, subscribeToAssignments } = useTaskStore();
-  const { width } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
+  const width = Platform.OS === 'web' ? Math.min(windowWidth, WEB_MAX_WIDTH) : windowWidth;
 
   const [panelIndex, setPanelIndex] = useState(DEFAULT_PANEL);
   const listRef = useRef<FlatList>(null);
@@ -86,19 +87,7 @@ export default function HomeScreen() {
 
   async function loadUserCollective() {
     if (!profile) return;
-    const { supabase } = await import('../../lib/supabase');
-    const { data: rows, error } = await supabase
-      .from('collective_members')
-      .select('collective_id')
-      .eq('user_id', profile.id)
-      .in('status', ['active', 'paused', 'pending'])
-      .order('joined_at', { ascending: false })
-      .limit(1);
-    if (error) console.error('[home] collective_members lookup failed:', JSON.stringify(error));
-    const row = rows?.[0] ?? null;
-    if (row?.collective_id) {
-      await fetchCollective(row.collective_id);
-    }
+    await useCollectiveStore.getState().loadUserCollective(profile.id);
     setCollectiveLoaded(true);
   }
 
