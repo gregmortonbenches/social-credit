@@ -12,6 +12,13 @@ import { useCollectiveStore } from '../../store/useCollectiveStore';
 import { useTaskStore } from '../../store/useTaskStore';
 import { TaskCard } from './TaskCard';
 
+type TabKey = 'today' | 'upcoming' | 'comrades';
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'today', label: 'TODAY' },
+  { key: 'upcoming', label: 'UPCOMING' },
+  { key: 'comrades', label: 'COMRADES' },
+];
+
 export function TasksPanel() {
   const profile = useAuthStore((s) => s.profile);
   const { myAssignments, allAssignments, fetchAssignments, isLoading, error } = useTaskStore();
@@ -20,6 +27,7 @@ export function TasksPanel() {
   const fetchCollective = useCollectiveStore((s) => s.fetchCollective);
   const [taskLibrary, setTaskLibrary] = useState<Record<string, TaskLibrary>>({});
   const [refreshing, setRefreshing] = useState(false);
+  const [tab, setTab] = useState<TabKey>('today');
 
   useEffect(() => {
     loadTaskLibrary();
@@ -75,6 +83,23 @@ export function TasksPanel() {
   const comradesAssignments = allAssignments.filter((a) => a.user_id !== profile?.id);
   const myStatus = members.find((m) => m.user_id === profile?.id)?.status;
 
+  const renderCard = (a: (typeof myAssignments)[number], readOnly = false) => {
+    const task = taskLibrary[a.task_id];
+    return (
+      <TaskCard
+        key={a.id}
+        assignment={a}
+        taskName={task?.name ?? '—'}
+        action={task?.action}
+        space={task?.space}
+        iconName={getTaskIcon(task?.action)}
+        readOnly={readOnly}
+      />
+    );
+  };
+
+  const showNotice = myAssignments.length === 0 && !isLoading && !error;
+
   return (
     <ScrollView
       style={styles.container}
@@ -94,14 +119,31 @@ export function TasksPanel() {
         />
       </View>
       <View style={styles.content}>
-      <Text style={styles.bannerText} accessibilityRole="header">TASKS</Text>
+      {/* The running total sits on the title row: completion floats a "+83" off
+          the card, and this is where it lands. */}
+      <View style={styles.titleRow}>
+        <Text style={styles.bannerText} accessibilityRole="header">TASKS</Text>
+        <Text
+          style={styles.creditValue}
+          accessibilityLabel={`Your credits: ${profile?.total_credits ?? 0}`}
+        >
+          {(profile?.total_credits ?? 0).toLocaleString()}
+        </Text>
+      </View>
       <View style={styles.titleRule} />
 
-      {/* The running total. Completion floats a "+83" off the card; without
-          somewhere for it to land, nothing in the app visibly accumulated. */}
-      <View style={styles.creditBar}>
-        <Text style={styles.creditLabel}>YOUR CREDITS</Text>
-        <Text style={styles.creditValue}>{(profile?.total_credits ?? 0).toLocaleString()}</Text>
+      <View style={styles.tabs} accessibilityRole="tablist">
+        {TABS.map((t) => (
+          <TouchableOpacity
+            key={t.key}
+            style={[styles.tab, tab === t.key && styles.tabActive]}
+            onPress={() => setTab(t.key)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === t.key }}
+          >
+            <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>{t.label}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {error ? (
@@ -116,62 +158,42 @@ export function TasksPanel() {
 
       {/* `isLoading` guard so the notice does not flash during the first fetch,
           when myAssignments is legitimately empty but about to be filled. */}
-      {myAssignments.length === 0 && !isLoading && !error ? (
+      {tab !== 'comrades' && showNotice ? (
         <NoAssignmentsNotice
           isPending={myStatus === 'pending'}
           timezone={collective?.timezone}
         />
       ) : null}
 
-      {overdue.length > 0 && (
-        <Section title="OVERDUE TASKS" titleColor={COLORS.danger}>
-          {overdue.map((a) => (
-            <TaskCard key={a.id} assignment={a} taskName={taskLibrary[a.task_id]?.name ?? '—'} iconName={getTaskIcon(taskLibrary[a.task_id]?.action)} />
-          ))}
-        </Section>
-      )}
-
-      {myAssignments.length > 0 && (
-        <Section title="TODAY'S DUTIES">
-          {today.length === 0 ? (
+      {tab === 'today' && !showNotice && (
+        <>
+          {overdue.length + today.length === 0 ? (
             <Text style={styles.empty}>Nothing due today.</Text>
           ) : (
-            today.map((a) => (
-              <TaskCard key={a.id} assignment={a} taskName={taskLibrary[a.task_id]?.name ?? '—'} iconName={getTaskIcon(taskLibrary[a.task_id]?.action)} />
-            ))
+            [...overdue, ...today].map((a) => renderCard(a))
           )}
-        </Section>
+          {completed.length > 0 && (
+            <Section title="COMPLETED THIS WEEK" collapsible>
+              {completed.map((a) => renderCard(a))}
+            </Section>
+          )}
+        </>
       )}
 
-      {upcoming.length > 0 && (
-        <Section title="UPCOMING">
-          {upcoming.map((a) => (
-            <TaskCard key={a.id} assignment={a} taskName={taskLibrary[a.task_id]?.name ?? '—'} iconName={getTaskIcon(taskLibrary[a.task_id]?.action)} />
-          ))}
-        </Section>
+      {tab === 'upcoming' && !showNotice && (
+        upcoming.length === 0 ? (
+          <Text style={styles.empty}>Nothing upcoming.</Text>
+        ) : (
+          upcoming.map((a) => renderCard(a))
+        )
       )}
 
-
-      {completed.length > 0 && (
-        <Section title="COMPLETED THIS WEEK" collapsible>
-          {completed.map((a) => (
-            <TaskCard key={a.id} assignment={a} taskName={taskLibrary[a.task_id]?.name ?? '—'} iconName={getTaskIcon(taskLibrary[a.task_id]?.action)} />
-          ))}
-        </Section>
-      )}
-
-      {comradesAssignments.length > 0 && (
-      <Section title="YOUR COMRADES' DUTIES" collapsible>
-        {comradesAssignments.map((a) => (
-          <TaskCard
-            key={a.id}
-            assignment={a}
-            taskName={taskLibrary[a.task_id]?.name ?? '—'}
-            iconName={getTaskIcon(taskLibrary[a.task_id]?.action)}
-            readOnly
-          />
-        ))}
-      </Section>
+      {tab === 'comrades' && (
+        comradesAssignments.length === 0 ? (
+          <Text style={styles.empty}>Nothing assigned yet.</Text>
+        ) : (
+          comradesAssignments.map((a) => renderCard(a, true))
+        )
       )}
       </View>
     </ScrollView>
@@ -307,26 +329,17 @@ const sectionStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   posterContainer: { position: 'relative' },
-  poster: { width: '100%', height: 160 },
-  posterFade: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 },
+  poster: { width: '100%', height: 110 },
+  posterFade: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 60 },
   content: { padding: 16 },
-  bannerText: { color: COLORS.primary, fontWeight: '900', letterSpacing: 3, fontSize: 26, marginBottom: 10, textAlign: 'center' },
+  bannerText: { color: COLORS.primary, fontWeight: '900', letterSpacing: 3, fontSize: 26 },
   titleRule: { height: 3, backgroundColor: COLORS.primary, marginBottom: 14 },
-  creditBar: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.surface,
-    paddingBottom: 10,
-    marginBottom: 20,
-  },
-  creditLabel: {
-    color: COLORS.muted,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 2,
-  },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  tabs: { flexDirection: 'row', borderWidth: 1, borderColor: COLORS.primary, marginBottom: 16 },
+  tab: { flex: 1, paddingVertical: 10, alignItems: 'center' },
+  tabActive: { backgroundColor: COLORS.primary },
+  tabText: { color: COLORS.primary, fontSize: 11, fontWeight: '700', letterSpacing: 2 },
+  tabTextActive: { color: '#FFFFFF' },
   creditValue: {
     color: COLORS.primary,
     fontFamily: 'SpaceMono',

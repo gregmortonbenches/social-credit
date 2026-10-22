@@ -13,6 +13,9 @@ interface Props {
   assignment: WeeklyAssignment;
   taskName: string;
   iconName?: string;
+  /** Split name: the action in bold, the space beneath it. Falls back to taskName. */
+  action?: string | null;
+  space?: string | null;
   readOnly?: boolean;
 }
 
@@ -28,7 +31,7 @@ function ordinal(n: number): string {
   }
 }
 
-export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
+export function TaskCard({ assignment, taskName, iconName, action, space, readOnly }: Props) {
   const completeTask = useTaskStore((s) => s.completeTask);
   const uncompleteTask = useTaskStore((s) => s.uncompleteTask);
   const rescheduleAssignment = useTaskStore((s) => s.rescheduleAssignment);
@@ -62,6 +65,18 @@ export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
   const dueLabel = dueIsToday ? 'TODAY' : collectiveWeekdayShort(due, tz).toUpperCase();
   const canReschedule = !readOnly && !isDone;
 
+  // A chip only earns its place when it says something the section does not:
+  // how late a task is, or which day an upcoming one falls on. "TODAY" under a
+  // Today heading, or "LATE" with no measure, was noise.
+  const daysLate = Math.floor((Date.now() - due.getTime()) / 86_400_000);
+  const dueChip = isDone
+    ? null
+    : isOverdue
+      ? daysLate >= 1 ? `${daysLate}D LATE` : 'LATE'
+      : dueIsToday
+        ? null
+        : dueLabel;
+
   // Ranking tasks is the most effortful thing a member does, and until now the
   // result was invisible: nothing ever said a task arrived because you asked for
   // it. `taskPreferences` holds the current user's ranking, so this is only
@@ -69,7 +84,9 @@ export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
   const preferenceRank = readOnly
     ? null
     : taskPreferences.find((tp) => tp.task_id === assignment.task_id)?.rank ?? null;
-  const preferenceLabel = preferenceRank !== null ? `YOUR ${ordinal(preferenceRank)} CHOICE` : null;
+  const preferenceLabel = preferenceRank !== null ? `${ordinal(preferenceRank)} CHOICE` : null;
+  const subline = [space, !isDone ? preferenceLabel : null].filter(Boolean).join('  ·  ');
+  const title = action && space ? action : taskName;
 
   async function handleReschedule(day: string) {
     setPickerOpen(false);
@@ -167,31 +184,28 @@ export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
           isDone && styles.taskNameDone,
           isOverdue && styles.taskNameOverdue,
         ]}>
-          {taskName}
+          {title}
         </Text>
-        {preferenceLabel && !isDone ? (
-          <Text style={styles.preferenceLabel}>{preferenceLabel}</Text>
+        {subline && action && space ? (
+          <Text style={styles.subline}>{subline}</Text>
+        ) : preferenceLabel && !isDone ? (
+          <Text style={styles.subline}>{preferenceLabel}</Text>
         ) : null}
       </View>
 
+      {dueChip ? (
+        <Text style={[styles.dueChip, isOverdue && styles.dueChipOverdue]}>{dueChip}</Text>
+      ) : null}
+
       {canReschedule ? (
         <TouchableOpacity
-          style={[styles.dueChip, isOverdue && styles.dueChipOverdue]}
           onPress={() => setPickerOpen(true)}
           accessibilityRole="button"
-          accessibilityLabel={
-            isOverdue
-              ? `${taskName} is overdue. Change the day.`
-              : `${taskName} is due ${dueLabel}. Change the day.`
-          }
-          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+          accessibilityLabel={`Change the day for ${taskName}`}
+          hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
         >
-          <Text style={[styles.dueChipText, isOverdue && styles.dueChipTextOverdue]}>
-            {isOverdue ? 'LATE' : dueLabel}
-          </Text>
+          <Ionicons name="calendar-outline" size={20} color={COLORS.muted} />
         </TouchableOpacity>
-      ) : !isDone ? (
-        <Text style={styles.dueChipText}>{isOverdue ? 'LATE' : dueLabel}</Text>
       ) : null}
 
       {/* Your own list is all you, so the avatar says nothing there. It earns its
@@ -254,40 +268,27 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.surface,
+    paddingVertical: 12,
     gap: 12,
   },
   rowDone: { opacity: 0.55 },
   icon: { width: 32 },
   dueChip: {
-    minWidth: 44,
-    minHeight: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.muted,
-    paddingHorizontal: 6,
-  },
-  dueChipOverdue: { borderColor: COLORS.danger },
-  dueChipText: {
     color: COLORS.muted,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1,
     fontFamily: 'SpaceMono',
   },
-  dueChipTextOverdue: { color: COLORS.danger },
+  dueChipOverdue: {
+    color: COLORS.danger,
+    backgroundColor: 'rgba(231, 76, 60, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
   nameCol: { flex: 1 },
   taskName: { fontSize: 17, color: COLORS.text, fontWeight: '500' },
-  preferenceLabel: {
-    color: COLORS.muted,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    marginTop: 2,
-  },
+  subline: { color: COLORS.muted, fontSize: 13, marginTop: 2 },
   taskNameDone: { textDecorationLine: 'line-through' },
   taskNameOverdue: { color: COLORS.danger },
   avatar: {
