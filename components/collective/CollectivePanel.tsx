@@ -223,7 +223,7 @@ export function CollectivePanel() {
         <View style={styles.aloneCard}>
           <Text style={styles.aloneHeading}>YOU STAND ALONE, COMRADE</Text>
           <Text style={styles.aloneBody}>
-            Invite your household with code {collective?.code}.
+            Invite code {collective?.code}
           </Text>
           <TouchableOpacity style={styles.aloneBtn} onPress={handleInvite} accessibilityRole="button">
             <Text style={styles.aloneBtnText}>INVITE COMRADES</Text>
@@ -257,7 +257,7 @@ export function CollectivePanel() {
                   accessibilityRole="button"
                   accessibilityLabel={`Withdraw the denunciation of Comrade ${profileName(d.accused_id)}`}
                 >
-                  <Text style={styles.withdrawText}>WITHDRAW THIS DENUNCIATION</Text>
+                  <Text style={styles.withdrawText}>WITHDRAW</Text>
                 </TouchableOpacity>
               ) : null}
               </View>
@@ -278,13 +278,13 @@ export function CollectivePanel() {
           </TouchableOpacity>
           {!canDenounce && (
             <Text style={styles.denounceHint}>
-              No Comrade has an overdue task. The Collective is in good order.
+              No overdue tasks.
             </Text>
           )}
         </View>
       ) : null}
 
-      <Text style={styles.sectionTitle}>MANAGE THE COLLECTIVE</Text>
+      <Text style={styles.sectionTitle}>MANAGE</Text>
       <View style={styles.manageGrid}>
         {profiles.length > 1 ? (
           <TouchableOpacity style={styles.manageBtn} onPress={handleInvite}>
@@ -328,7 +328,7 @@ export function CollectivePanel() {
               <>
                 <Text style={styles.pickerLabel}>SELECT FAILED TASK</Text>
                 {accusedAssignments.length === 0 ? (
-                  <Text style={styles.noTasks}>No overdue tasks found for this Comrade.</Text>
+                  <Text style={styles.noTasks}>No overdue tasks.</Text>
                 ) : (
                   accusedAssignments.map((a) => (
                     <TouchableOpacity

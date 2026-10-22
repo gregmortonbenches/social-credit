@@ -108,8 +108,7 @@ export function TasksPanel() {
         <View style={styles.errorCard}>
           <Text style={styles.errorHeading}>CANNOT REACH THE COLLECTIVE</Text>
           <Text style={styles.errorBody}>
-            Your duties could not be loaded. Check your connection and pull down to
-            try again, Comrade.
+            Pull down to try again, Comrade.
           </Text>
           <Text style={styles.errorDetail}>{error}</Text>
         </View>
@@ -135,7 +134,7 @@ export function TasksPanel() {
       {myAssignments.length > 0 && (
         <Section title="TODAY'S DUTIES">
           {today.length === 0 ? (
-            <Text style={styles.empty}>No tasks due today, Comrade.</Text>
+            <Text style={styles.empty}>Nothing due today.</Text>
           ) : (
             today.map((a) => (
               <TaskCard key={a.id} assignment={a} taskName={taskLibrary[a.task_id]?.name ?? '—'} iconName={getTaskIcon(taskLibrary[a.task_id]?.action)} />
@@ -161,6 +160,7 @@ export function TasksPanel() {
         </Section>
       )}
 
+      {comradesAssignments.length > 0 && (
       <Section title="YOUR COMRADES' DUTIES" collapsible>
         {comradesAssignments.map((a) => (
           <TaskCard
@@ -171,10 +171,8 @@ export function TasksPanel() {
             readOnly
           />
         ))}
-        {comradesAssignments.length === 0 && (
-          <Text style={styles.empty}>No tasks assigned to other Comrades yet.</Text>
-        )}
       </Section>
+      )}
       </View>
     </ScrollView>
   );
@@ -198,14 +196,11 @@ function NoAssignmentsNotice({ isPending, timezone }: { isPending: boolean; time
 
       {isPending ? (
         <Text style={noticeStyles.body}>
-          You joined mid-week, Comrade. You become a full member of the Collective
-          at Monday 00:00, and receive your first duties in the assignment that
-          follows.
+          You become a full member Monday 00:00. Your first duties follow.
         </Text>
       ) : (
         <Text style={noticeStyles.body}>
-          Duties are assigned every Sunday afternoon
-          {when ? ` — next ${when}` : ''}. Rank the tasks you prefer first.
+          Duties are assigned Sunday afternoon{when ? ` — next ${when}` : ''}.
         </Text>
       )}
 
@@ -215,7 +210,7 @@ function NoAssignmentsNotice({ isPending, timezone }: { isPending: boolean; time
         accessibilityRole="button"
         accessibilityLabel="Set my task preferences"
       >
-        <Text style={noticeStyles.btnText}>SET MY TASK PREFERENCES</Text>
+        <Text style={noticeStyles.btnText}>SET PREFERENCES</Text>
       </TouchableOpacity>
     </View>
   );

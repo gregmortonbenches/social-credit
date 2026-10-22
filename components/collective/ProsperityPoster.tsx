@@ -17,10 +17,10 @@ function weeks(n: number): string {
 function weekLine(week: WeekProgress): string {
   if (week.total === 0) return 'NO DUTIES THIS WEEK YET.';
   if (week.overdue > 0) {
-    return `${week.overdue} ${week.overdue === 1 ? 'DUTY IS' : 'DUTIES ARE'} OVERDUE. THE STREAK IS IN DANGER.`;
+    return `${week.overdue} ${week.overdue === 1 ? 'DUTY IS' : 'DUTIES ARE'} OVERDUE. STREAK AT RISK.`;
   }
-  if (week.done === week.total) return 'ALL DUTIES FULFILLED. THE STREAK HOLDS.';
-  return `${week.done} OF ${week.total} DUTIES FULFILLED THIS WEEK.`;
+  if (week.done === week.total) return 'ALL DUTIES FULFILLED.';
+  return `${week.done} OF ${week.total} DUTIES FULFILLED.`;
 }
 
 /**
@@ -41,11 +41,9 @@ export function ProsperityPoster({ streak, week }: Props) {
         stage.next ? `Building towards ${stage.next.name}.` : 'Every stage of prosperity has been built.'
       }`}
     >
-      <Text style={styles.label}>PROSPERITY OF THE COLLECTIVE</Text>
-
       <Text style={styles.streak}>{streak}</Text>
       <Text style={styles.streakOf}>
-        {streak === 1 ? 'WEEK' : 'WEEKS'} OF UNBROKEN PROSPERITY
+        {streak === 1 ? 'WEEK' : 'WEEKS'} UNBROKEN
       </Text>
 
       {stage.current ? <Text style={styles.stage}>{stage.current.name.toUpperCase()}</Text> : null}
@@ -62,11 +60,11 @@ export function ProsperityPoster({ streak, week }: Props) {
       {stage.next ? (
         <Text style={styles.next}>
           {streak === 0
-            ? 'GROUND HAS BEEN BROKEN. COMPLETE EVERY DUTY THIS WEEK TO RAISE THE FIRST HARVEST.'
+            ? 'GROUND BROKEN. COMPLETE EVERY DUTY TO BEGIN.'
             : `NEXT: ${stage.next.name.toUpperCase()} IN ${weeks(stage.weeksToNext ?? 0)}`}
         </Text>
       ) : (
-        <Text style={styles.next}>THE GOLDEN AGE STANDS COMPLETE.</Text>
+        <Text style={styles.next}>THE GOLDEN AGE STANDS.</Text>
       )}
 
       <View style={styles.rule} />
@@ -83,13 +81,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     marginBottom: 8,
-  },
-  label: {
-    color: COLORS.primary,
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 3,
-    textAlign: 'center',
   },
   streak: {
     color: COLORS.primary,

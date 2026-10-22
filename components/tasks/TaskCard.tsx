@@ -69,16 +69,7 @@ export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
   const preferenceRank = readOnly
     ? null
     : taskPreferences.find((tp) => tp.task_id === assignment.task_id)?.rank ?? null;
-  // "Not one of your picks" only reads as information if the member has actually
-  // ranked something — otherwise it would sit on every card as noise for someone
-  // who has never opened the preferences screen.
-  const hasAnyPreferences = !readOnly && taskPreferences.length > 0;
-  const preferenceLabel =
-    preferenceRank !== null
-      ? `YOUR ${ordinal(preferenceRank)} CHOICE`
-      : hasAnyPreferences
-        ? 'NOT ONE OF YOUR PICKS'
-        : null;
+  const preferenceLabel = preferenceRank !== null ? `YOUR ${ordinal(preferenceRank)} CHOICE` : null;
 
   async function handleReschedule(day: string) {
     setPickerOpen(false);
@@ -162,11 +153,11 @@ export function TaskCard({ assignment, taskName, iconName, readOnly }: Props) {
   }
 
   return (
-    <View style={[styles.row, isOverdue && styles.rowOverdue, isDone && styles.rowDone]}>
+    <View style={[styles.row, isDone && styles.rowDone]}>
       <Ionicons
         name={(iconName ?? 'checkmark-circle-outline') as any}
         size={28}
-        color={isOverdue ? COLORS.danger : isDone ? COLORS.muted : COLORS.text}
+        color={isDone ? COLORS.muted : COLORS.text}
         style={styles.icon}
       />
 
@@ -268,7 +259,6 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.surface,
     gap: 12,
   },
-  rowOverdue: { borderLeftWidth: 3, borderLeftColor: COLORS.danger, paddingLeft: 8 },
   rowDone: { opacity: 0.55 },
   icon: { width: 32 },
   dueChip: {
