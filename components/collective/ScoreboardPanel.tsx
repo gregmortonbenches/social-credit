@@ -90,7 +90,6 @@ export function ScoreboardPanel() {
         <View style={styles.titleRule} />
 
         <View style={styles.quotaCard}>
-          <Text style={styles.quotaLabel}>COLLECTIVE CREDITS</Text>
           <View style={styles.quotaMainRow}>
             <Text style={styles.quotaCreditsNum} adjustsFontSizeToFit numberOfLines={1}>
               {totalWeekly.toLocaleString()}
@@ -100,7 +99,6 @@ export function ScoreboardPanel() {
             <View style={styles.quotaTarget}>
               <Text style={styles.quotaTargetOf}>OF</Text>
               <Text style={styles.quotaTargetNum}>{CONFIG.WEEKLY_CREDIT_POOL.toLocaleString()}</Text>
-              <Text style={styles.quotaTargetOf}>REQUIRED</Text>
             </View>
           </View>
           <View
@@ -119,10 +117,6 @@ export function ScoreboardPanel() {
             </Svg>
             <View style={[styles.quotaFill, { width: `${quotaPercent}%` }]} />
           </View>
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionHeaderText}>COMRADE STANDINGS</Text>
         </View>
 
         {sortedMembers.map((member, index) => {
@@ -177,13 +171,6 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 20,
   },
-  quotaLabel: {
-    color: COLORS.muted,
-    fontSize: 10,
-    letterSpacing: 3,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
   quotaMainRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -207,23 +194,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   quotaFill: { height: '100%', backgroundColor: COLORS.primary },
-  sectionHeader: {
-    backgroundColor: COLORS.surface,
-    paddingVertical: 9,
-    paddingHorizontal: 16,
-    marginHorizontal: -16,
-    marginBottom: 1,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: COLORS.primary,
-  },
-  sectionHeaderText: {
-    color: COLORS.primary,
-    fontWeight: '900',
-    fontSize: 11,
-    letterSpacing: 3,
-    textAlign: 'center',
-  },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',

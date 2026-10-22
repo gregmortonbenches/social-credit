@@ -292,9 +292,7 @@ export default function PreferencesScreen() {
         {/* Ranking is the most effortful thing a member does here, and nothing
             said what it buys them. */}
         <Text style={styles.explainer}>
-          Duties are assigned every Sunday. Whoever earned the most credits last
-          week picks first, and each Comrade receives their highest-ranked task
-          still unclaimed. Your picks are then marked on your task cards.
+          Whoever earned the most credits last week picks first.
         </Text>
 
         {displayedTasks.length > 0 && (
@@ -321,7 +319,6 @@ export default function PreferencesScreen() {
             <Text style={styles.sectionLabel}>
               {displayedTasks.length === 0 ? 'TAP TO RANK' : 'UNRANKED — TAP TO ADD'}
             </Text>
-            <Text style={styles.hint}>Unranked tasks are assigned last, in rotation.</Text>
             {unranked.map((task) => (
               <UnrankedRow key={task.id} task={task} onAdd={addToRanked} />
             ))}

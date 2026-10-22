@@ -310,7 +310,7 @@ export default function SettingsScreen() {
         {showDeleteSection && (
           <View style={styles.deleteBox}>
             <Text style={styles.deleteWarning}>
-              Your email and login will be permanently deleted. Task history will be anonymised as "Former Comrade".
+              Permanent. Task history will be anonymised.
             </Text>
             <TextInput
               style={styles.deleteInput}
@@ -327,8 +327,6 @@ export default function SettingsScreen() {
           </View>
         )}
       </Section>
-
-      {profile?.is_admin && <AdminSection />}
 
       {(__DEV__ || profile?.is_admin) && collective && profile && (
         <DevSection
@@ -359,17 +357,6 @@ function SettingRow({ label, children }: { label: string; children: React.ReactN
     <View style={rowStyles.row}>
       <Text style={rowStyles.label}>{label}</Text>
       {children}
-    </View>
-  );
-}
-
-function AdminSection() {
-  return (
-    <View style={sectionStyles.container}>
-      <Text style={[sectionStyles.title, { color: COLORS.danger }]}>ADMIN</Text>
-      <Text style={{ color: COLORS.muted, fontSize: 13 }}>
-        Admin controls are available. Use the Supabase dashboard for advanced operations.
-      </Text>
     </View>
   );
 }
